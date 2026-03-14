@@ -1,0 +1,108 @@
+<div class="layout" [class.guest-layout]="!auth.isLoggedIn()" [class.sidebar-open]="auth.isLoggedIn() && mobileSidebarOpen()">
+  @if (auth.isLoggedIn()) {
+    <aside class="sidebar" [class.sidebar-open]="mobileSidebarOpen()">
+      <div class="sidebar-brand">
+        <div class="brand-mark">QL</div>
+        <div>
+          <p class="brand-kicker">{{ theme.isDark() ? 'Midnight Control' : 'Daylight Control' }}</p>
+          <h2>Quiz Live</h2>
+          <p>{{ theme.isDark() ? 'Run, monitor, and play live quizzes from one refined dark workspace.' : 'Run, monitor, and play live quizzes from one bright and polished workspace.' }}</p>
+        </div>
+        <button type="button" class="secondary sidebar-close" (click)="closeSidebar()" aria-label="Close menu">
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+
+      <div class="sidebar-role">
+        <span class="status-dot"></span>
+        {{ auth.role() || 'User' }} workspace
+      </div>
+
+      <nav class="sidebar-menu">
+        @if (auth.role() === 'Admin' || auth.role() === 'Host') {
+          <a routerLink="/questions" routerLinkActive="active" (click)="closeSidebar()">
+            <span>Question Bank</span>
+            <small>Craft and refine your library</small>
+          </a>
+          <a routerLink="/quizzes" routerLinkActive="active" (click)="closeSidebar()">
+            <span>Quizzes</span>
+            <small>Build polished quiz experiences</small>
+          </a>
+          <a routerLink="/game-sessions" routerLinkActive="active" (click)="closeSidebar()">
+            <span>Live Sessions</span>
+            <small>Control game flow in real time</small>
+          </a>
+          <a routerLink="/results" routerLinkActive="active" (click)="closeSidebar()">
+            <span>Results</span>
+            <small>Read performance and analytics</small>
+          </a>
+        }
+        @if (auth.role() === 'Player') {
+          <a routerLink="/player/history" routerLinkActive="active" (click)="closeSidebar()">
+            <span>My History</span>
+            <small>Track sessions and test attempts</small>
+          </a>
+        }
+        <a routerLink="/test-mode" routerLinkActive="active" (click)="closeSidebar()">
+          <span>Test Mode</span>
+          <small>Practice with instant feedback</small>
+        </a>
+        <a routerLink="/player/join" routerLinkActive="active" (click)="closeSidebar()">
+          <span>Join Game</span>
+          <small>Enter a live session quickly</small>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-insight">
+          <span class="sidebar-insight-label">Workspace</span>
+          <strong>{{ shellTitle() }}</strong>
+          <p class="sidebar-insight-copy">{{ currentThemeLabel() }}</p>
+          <div class="topbar-chip sidebar-chip">
+            <span class="status-dot"></span>
+            Realtime ready
+          </div>
+          <button type="button" class="secondary theme-switch" (click)="toggleTheme()">{{ themeActionLabel() }}</button>
+        </div>
+        <button class="logout-btn" (click)="logout()">Logout</button>
+      </div>
+    </aside>
+
+    <button
+      type="button"
+      class="sidebar-backdrop"
+      [class.sidebar-backdrop-visible]="mobileSidebarOpen()"
+      (click)="closeSidebar()"
+      aria-label="Close menu"></button>
+
+    @if (!mobileSidebarOpen()) {
+      <button
+        type="button"
+        class="secondary menu-toggle menu-toggle-floating"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="menuButtonLabel()"
+        [attr.aria-expanded]="mobileSidebarOpen()">
+        <span class="menu-toggle-icon" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </span>
+        <span class="menu-toggle-text">{{ menuButtonText() }}</span>
+      </button>
+    }
+  }
+
+  <main class="content" [class.content-guest]="!auth.isLoggedIn()">
+    @if (!auth.isLoggedIn()) {
+      <button type="button" class="secondary guest-theme-toggle" (click)="toggleTheme()">{{ currentThemeLabel() }}</button>
+    }
+
+    <div class="content-frame" [class.content-frame-guest]="!auth.isLoggedIn()">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>
+
+<app-confirm-dialog></app-confirm-dialog>
+

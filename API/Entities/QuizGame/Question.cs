@@ -1,0 +1,26 @@
+using Entities;
+
+namespace API.Entities.QuizGame;
+
+public class Question : BaseEntity
+{
+    public string Title { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public QuestionType Type { get; set; }
+    public string? Difficulty { get; set; }
+    public int Points { get; set; }
+    public int AnswerSeconds { get; set; } = 30;
+    public int? CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public virtual ICollection<QuestionChoice> Choices { get; set; } = new List<QuestionChoice>();
+    public virtual ICollection<QuizQuestion> QuizQuestions { get; set; } = new List<QuizQuestion>();
+}
+
+public class QuestionChoice : BaseEntity
+{
+    public int QuestionId { get; set; }
+    public string ChoiceText { get; set; } = string.Empty;
+    public bool IsCorrect { get; set; }
+    public int Order { get; set; }
+    public virtual Question Question { get; set; } = null!;
+}

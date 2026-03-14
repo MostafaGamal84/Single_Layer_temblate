@@ -1,136 +1,129 @@
 using API.Entities;
-using API.Entities.Auctions;
+using API.Entities.QuizGame;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
-namespace API.Data
+namespace API.Data;
+
+public class DataContext : IdentityDbContext<AppUser, AppRole, int,
+    IdentityUserClaim<int>, AppUserRole, IdentityUserLogin<int>,
+    IdentityRoleClaim<int>, IdentityUserToken<int>>
 {
-    public class DataContext : IdentityDbContext<AppUser, AppRole, int,
-     IdentityUserClaim<int>, AppUserRole, IdentityUserLogin<int>,
-     IdentityRoleClaim<int>, IdentityUserToken<int>>
+    public DataContext(DbContextOptions options) : base(options)
     {
-        public DataContext(DbContextOptions options) : base(options)
-        {
+    }
 
-        }
+    public DbSet<Question> Questions => Set<Question>();
+    public DbSet<QuestionChoice> QuestionChoices => Set<QuestionChoice>();
+    public DbSet<Quiz> Quizzes => Set<Quiz>();
+    public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
+    public DbSet<GameSession> GameSessions => Set<GameSession>();
+    public DbSet<GameParticipant> GameParticipants => Set<GameParticipant>();
+    public DbSet<PlayerAnswer> PlayerAnswers => Set<PlayerAnswer>();
+    public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
+    public DbSet<QuizAttemptAnswer> QuizAttemptAnswers => Set<QuizAttemptAnswer>();
 
-        public DbSet<AppUserType> appUserTypes { get; set; }
-        public DbSet<Admin> admins { get; set; }
-      
-        public DbSet<Gender> genders { get; set; }
-        public DbSet<VehicleType> vehicleTypes { get; set; }
-        public DbSet<Repair> repairs { get; set; }
-        public DbSet<Warranty> warranties { get; set; }
-        public DbSet<Insurance> insurances { get; set; }
-        public DbSet<BrandName> brandNames { get; set; }
-        public DbSet<CarStatus> carStatuses { get; set; }
-        public DbSet<CarType> carTypes { get; set; }
-        public DbSet<Model> models { get; set; }
-        public DbSet<Color> colors { get; set; }
-        public DbSet<Item> items { get; set; }
-        public DbSet<ItemPhoto> itemPhotos { get; set; }
-        public DbSet<ProviderType> providerTypes { get; set; }
-        public DbSet<TermsAndConditions> termsAndConditions { get; set; }
-        public DbSet<AboutUs> aboutUs { get; set; }
-        public DbSet<Auction> auctions { get; set; }
-        public DbSet<ProviderPhoto> providerPhotos { get; set; }
-  
-        public DbSet<FavoriteAuction> FavoriteAuctions { get; set; }
-        public DbSet<Banners> banners { get; set; }
-        public DbSet<Key> keys { get; set; }
-        public DbSet<CarCommetion> carCommetions { get; set; }
-        public DbSet<Subscribe> Subscribes { get; set; }
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
 
-        protected override void OnModelCreating(ModelBuilder builder)
-        {
-            base.OnModelCreating(builder);
-
-            builder.Entity<AppUser>()
+        builder.Entity<AppUser>()
             .HasMany(ur => ur.UserRoles)
             .WithOne(u => u.User)
             .HasForeignKey(ur => ur.UserId)
             .IsRequired();
 
-            builder.Entity<AppUserType>()
-           .HasMany(x => x.Users)
-           .WithOne(x => x.AppUserType)
-           .HasForeignKey(x => x.AppUserTypeId)
-           .IsRequired();
-
-            builder.Entity<AppRole>()
+        builder.Entity<AppRole>()
             .HasMany(ur => ur.UserRoles)
             .WithOne(u => u.Role)
             .HasForeignKey(ur => ur.RoleId)
             .IsRequired();
 
-            builder.Entity<Provider>()
-            .HasMany(ur => ur.Auctions)
-            .WithOne(ur => ur.Provider)
-            .HasForeignKey(ur => ur.ProviderId);
+        builder.Entity<Question>()
+            .HasMany(x => x.Choices)
+            .WithOne(x => x.Question)
+            .HasForeignKey(x => x.QuestionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        
+        builder.Entity<Quiz>()
+            .HasMany(x => x.QuizQuestions)
+            .WithOne(x => x.Quiz)
+            .HasForeignKey(x => x.QuizId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-            builder.Entity<Client>()
-            .HasMany(ur => ur.AuctionRecords)
-            .WithOne(u => u.Client)
-            .HasForeignKey(ur => ur.ClientId)
-            .OnDelete(DeleteBehavior.NoAction)
-            .IsRequired();
+        builder.Entity<Question>()
+            .HasMany(x => x.QuizQuestions)
+            .WithOne(x => x.Question)
+            .HasForeignKey(x => x.QuestionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-            
-           
+        builder.Entity<GameSession>()
+            .HasOne(x => x.Quiz)
+            .WithMany()
+            .HasForeignKey(x => x.QuizId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-            //  builder.Entity<Client>()
-            // .HasOne(ur => ur.Subscribe)
-            // .WithMany(u => u.Clients)
-            // .HasForeignKey(ur => ur.SubscribeId)
-            // .OnDelete(DeleteBehavior.NoAction)
-            // .IsRequired();
+        builder.Entity<GameSession>()
+            .HasMany(x => x.Participants)
+            .WithOne(x => x.GameSession)
+            .HasForeignKey(x => x.GameSessionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
+        builder.Entity<GameSession>()
+            .HasMany(x => x.Answers)
+            .WithOne(x => x.GameSession)
+            .HasForeignKey(x => x.GameSessionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<GameParticipant>()
+            .HasMany(x => x.Answers)
+            .WithOne(x => x.Participant)
+            .HasForeignKey(x => x.ParticipantId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-           builder.Entity<Client>()
-            .HasMany(ur => ur.FavoriteAuctions)
-            .WithOne(u => u.Client)
-            .HasForeignKey(ur => ur.ClientId)
-            .OnDelete(DeleteBehavior.NoAction)
-            .IsRequired();
+        builder.Entity<PlayerAnswer>()
+            .HasOne(x => x.Question)
+            .WithMany()
+            .HasForeignKey(x => x.QuestionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-             
+        builder.Entity<PlayerAnswer>()
+            .HasOne(x => x.SelectedChoice)
+            .WithMany()
+            .HasForeignKey(x => x.SelectedChoiceId)
+            .OnDelete(DeleteBehavior.NoAction);
 
-            builder.Entity<Item>()
-            .HasMany(ur => ur.itemPhotos)
-            .WithOne(ur => ur.Item)
-            .HasForeignKey(ur => ur.ItemId)
-            .IsRequired();
+        builder.Entity<QuizAttempt>()
+            .HasOne(x => x.Quiz)
+            .WithMany()
+            .HasForeignKey(x => x.QuizId)
+            .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<QuizAttempt>()
+            .HasMany(x => x.Answers)
+            .WithOne(x => x.QuizAttempt)
+            .HasForeignKey(x => x.QuizAttemptId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-            builder.Entity<BrandName>()
-           .HasMany(ur => ur.Item)
-           .WithOne(u => u.BrandName)
-           .HasForeignKey(ur => ur.BrandNameId)
-           .IsRequired();
+        builder.Entity<QuizAttemptAnswer>()
+            .HasOne(x => x.Question)
+            .WithMany()
+            .HasForeignKey(x => x.QuestionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Entity<QuizAttemptAnswer>()
+            .HasOne(x => x.SelectedChoice)
+            .WithMany()
+            .HasForeignKey(x => x.SelectedChoiceId)
+            .OnDelete(DeleteBehavior.NoAction);
 
-            builder.Entity<ProviderType>()
-           .HasMany(ur => ur.Provider)
-           .WithOne(ur => ur.ProviderType)
-           .HasForeignKey(ur => ur.ProviderTypeId)
-           .IsRequired();
+        builder.Entity<GameSession>()
+            .HasIndex(x => x.JoinCode)
+            .IsUnique();
 
-            builder.Entity<Auction>()
-            .HasMany(ur => ur.AuctionRecords)
-            .WithOne(ur => ur.Auction)
-            .HasForeignKey(ur => ur.AuctionId)
-            .IsRequired();
-
-        }
-
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder){
-            optionsBuilder.UseLazyLoadingProxies();
-        }
-
-
+        builder.Entity<GameParticipant>()
+            .HasIndex(x => new { x.GameSessionId, x.DisplayName })
+            .IsUnique();
     }
 }

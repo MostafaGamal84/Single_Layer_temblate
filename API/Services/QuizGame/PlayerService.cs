@@ -1,0 +1,499 @@
+using API.Data;
+using API.DTOs.QuizGame;
+using API.Entities.QuizGame;
+using API.Interfaces.QuizGame;
+using API.SignalR;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Services.QuizGame;
+
+public class PlayerService : IPlayerService
+{
+    private readonly DataContext _context;
+    private readonly IHubContext<LiveGameHub> _hubContext;
+
+    public PlayerService(DataContext context, IHubContext<LiveGameHub> hubContext)
+    {
+        _context = context;
+        _hubContext = hubContext;
+    }
+
+    public async Task<PlayerJoinResponseDto?> JoinAsync(PlayerJoinDto dto, int? userId)
+    {
+        if (string.IsNullOrWhiteSpace(dto.DisplayName))
+        {
+            throw new ArgumentException("Display name is required.");
+        }
+
+        GameSession? session = null;
+        if (dto.SessionId.HasValue)
+        {
+            session = await _context.Set<GameSession>()
+                .FirstOrDefaultAsync(x => x.Id == dto.SessionId.Value && !x.IsDeleted);
+        }
+        else if (!string.IsNullOrWhiteSpace(dto.JoinCode))
+        {
+            session = await _context.Set<GameSession>()
+                .FirstOrDefaultAsync(x => x.JoinCode == dto.JoinCode.Trim().ToUpper() && !x.IsDeleted);
+        }
+
+        if (session is null)
+        {
+            return null;
+        }
+
+        var normalizedName = dto.DisplayName.Trim();
+        var existingParticipant = await _context.Set<GameParticipant>()
+            .FirstOrDefaultAsync(x =>
+                x.GameSessionId == session.Id &&
+                x.DisplayName.ToLower() == normalizedName.ToLower());
+
+        GameParticipant participant;
+        if (existingParticipant is not null)
+        {
+            var canRejoin = existingParticipant.IsDeleted
+                || existingParticipant.JoinStatus == ParticipantJoinStatus.Left
+                || existingParticipant.JoinStatus == ParticipantJoinStatus.Rejected;
+
+            if (!canRejoin)
+            {
+                throw new ArgumentException("Display name is already used in this session.");
+            }
+
+            participant = existingParticipant;
+            participant.IsDeleted = false;
+            participant.UserId = userId;
+            participant.JoinStatus = ParticipantJoinStatus.Pending;
+            participant.RequestedAt = DateTime.UtcNow;
+            participant.ApprovedAt = null;
+            participant.RejectedAt = null;
+            participant.LeftAt = null;
+            participant.DecisionByHostId = null;
+            participant.DecisionNote = null;
+            participant.IsConnected = false;
+            participant.ParticipantToken = Guid.NewGuid().ToString("N");
+            participant.Rank = null;
+        }
+        else
+        {
+            participant = new GameParticipant
+            {
+                GameSessionId = session.Id,
+                DisplayName = normalizedName,
+                UserId = userId,
+                JoinStatus = ParticipantJoinStatus.Pending,
+                RequestedAt = DateTime.UtcNow,
+                IsConnected = false,
+                IsDeleted = false,
+                ParticipantToken = Guid.NewGuid().ToString("N")
+            };
+
+            _context.Set<GameParticipant>().Add(participant);
+        }
+
+        await _context.SaveChangesAsync();
+
+        await _hubContext.Clients.Group(GetGroupName(session.Id)).SendAsync("joinRequestCreated", new
+        {
+            sessionId = session.Id,
+            participantId = participant.Id,
+            displayName = participant.DisplayName,
+            requestedAt = participant.RequestedAt
+        });
+
+        var waitingRoom = await GetWaitingRoomAsync(session.Id);
+        if (waitingRoom is not null)
+        {
+            await _hubContext.Clients.Group(GetGroupName(session.Id)).SendAsync("waitingRoomUpdated", waitingRoom);
+        }
+
+        await BroadcastSessionUpdatedAsync(session.Id);
+
+        return new PlayerJoinResponseDto
+        {
+            ParticipantId = participant.Id,
+            ParticipantToken = participant.ParticipantToken,
+            SessionId = session.Id,
+            DisplayName = participant.DisplayName,
+            JoinStatus = participant.JoinStatus,
+            RequiresApproval = true
+        };
+    }
+
+    public async Task<WaitingRoomDto?> GetWaitingRoomAsync(int sessionId)
+    {
+        var session = await _context.Set<GameSession>()
+            .AsNoTracking()
+            .Include(x => x.Quiz)
+            .Include(x => x.Participants)
+            .FirstOrDefaultAsync(x => x.Id == sessionId && !x.IsDeleted);
+
+        if (session is null)
+        {
+            return null;
+        }
+
+        return new WaitingRoomDto
+        {
+            SessionId = sessionId,
+            SessionStatus = session.Status.ToString(),
+            QuizTitle = session.Quiz.Title,
+            ParticipantsCount = session.Participants.Count(IsApprovedParticipant),
+            Participants = session.Participants
+                .Where(IsApprovedParticipant)
+                .OrderBy(x => x.JoinedAt)
+                .Select(x => x.DisplayName)
+                .ToList()
+        };
+    }
+
+    public async Task<QuestionResponseDto?> GetCurrentQuestionAsync(int sessionId)
+    {
+        var session = await _context.Set<GameSession>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == sessionId && !x.IsDeleted);
+
+        if (session is null)
+        {
+            return null;
+        }
+
+        var qq = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => x.QuizId == session.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .Skip(session.CurrentQuestionIndex)
+            .Take(1)
+            .Include(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
+            .FirstOrDefaultAsync();
+
+        if (qq is null)
+        {
+            return null;
+        }
+
+        return new QuestionResponseDto
+        {
+            Id = qq.Question.Id,
+            Title = qq.Question.Title,
+            Text = qq.Question.Text,
+            Type = qq.Question.Type,
+            Difficulty = qq.Question.Difficulty,
+            Points = qq.PointsOverride ?? qq.Question.Points,
+            AnswerSeconds = qq.AnswerSeconds,
+            CreatedBy = qq.Question.CreatedBy,
+            CreatedAt = qq.Question.CreatedAt,
+            Choices = qq.Question.Type == QuestionType.ShortAnswer
+                ? new List<QuestionChoiceDto>()
+                : qq.Question.Choices.OrderBy(c => c.Order).Select(c => new QuestionChoiceDto
+                {
+                    Id = c.Id,
+                    ChoiceText = c.ChoiceText,
+                    IsCorrect = false,
+                    Order = c.Order
+                }).ToList()
+        };
+    }
+
+    public async Task<PlayerAnswerSubmitResponseDto> SubmitAnswerAsync(int sessionId, SubmitPlayerAnswerDto dto)
+    {
+        var session = await _context.Set<GameSession>()
+            .FirstOrDefaultAsync(x => x.Id == sessionId && !x.IsDeleted);
+        if (session is null || session.Status != GameSessionStatus.Live)
+        {
+            return Rejected("Session is not live.");
+        }
+
+        var participant = await _context.Set<GameParticipant>()
+            .FirstOrDefaultAsync(x => x.Id == dto.ParticipantId && x.GameSessionId == sessionId && !x.IsDeleted);
+
+        if (participant is null || participant.JoinStatus != ParticipantJoinStatus.Approved || !participant.IsConnected)
+        {
+            return Rejected("Participant is not allowed to answer.");
+        }
+
+        var currentQuestion = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => x.QuizId == session.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .Skip(session.CurrentQuestionIndex)
+            .Take(1)
+            .FirstOrDefaultAsync();
+        if (currentQuestion is null || currentQuestion.QuestionId != dto.QuestionId)
+        {
+            return Rejected("Question mismatch.");
+        }
+
+        if (session.QuestionFlowMode == SessionQuestionFlowMode.TimedByQuestion &&
+            session.CurrentQuestionEndsAt.HasValue &&
+            session.CurrentQuestionEndsAt.Value < DateTime.UtcNow)
+        {
+            return Rejected("Question time has ended.");
+        }
+
+        var alreadyAnswered = await _context.Set<PlayerAnswer>().AnyAsync(x =>
+            x.GameSessionId == sessionId &&
+            x.ParticipantId == dto.ParticipantId &&
+            x.QuestionId == dto.QuestionId &&
+            !x.IsDeleted);
+
+        if (alreadyAnswered)
+        {
+            return Rejected("Answer already submitted.");
+        }
+
+        var question = await _context.Set<Question>()
+            .Include(x => x.Choices.Where(c => !c.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == dto.QuestionId && !x.IsDeleted);
+
+        if (question is null)
+        {
+            return Rejected("Question not found.");
+        }
+
+        var isCorrect = EvaluateAnswer(question, dto);
+        var score = isCorrect ? question.Points : 0;
+        var correctChoiceId = question.Type == QuestionType.ShortAnswer
+            ? (int?)null
+            : question.Choices.FirstOrDefault(x => x.IsCorrect)?.Id;
+
+        var answer = new PlayerAnswer
+        {
+            GameSessionId = sessionId,
+            ParticipantId = dto.ParticipantId,
+            QuestionId = dto.QuestionId,
+            SelectedChoiceId = dto.SelectedChoiceId,
+            TextAnswer = dto.TextAnswer,
+            IsCorrect = isCorrect,
+            ScoreAwarded = score,
+            ResponseTimeMs = dto.ResponseTimeMs,
+            AnsweredAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        _context.Set<PlayerAnswer>().Add(answer);
+        participant.TotalScore += score;
+
+        await _context.SaveChangesAsync();
+
+        await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("answerSubmitted", new
+        {
+            sessionId,
+            participantId = participant.Id,
+            questionId = question.Id,
+            isCorrect
+        });
+
+        var leaderboard = await GetLeaderboardAsync(sessionId);
+        await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("leaderboardUpdated", leaderboard);
+
+        return new PlayerAnswerSubmitResponseDto
+        {
+            Accepted = true,
+            IsCorrect = isCorrect,
+            SelectedChoiceId = dto.SelectedChoiceId,
+            CorrectChoiceId = correctChoiceId,
+            Message = "Answer submitted"
+        };
+    }
+
+    public async Task<List<LeaderboardItemDto>> GetLeaderboardAsync(int sessionId)
+    {
+        var participants = await _context.Set<GameParticipant>()
+            .Where(x => x.GameSessionId == sessionId && !x.IsDeleted && x.JoinStatus == ParticipantJoinStatus.Approved)
+            .OrderByDescending(x => x.TotalScore)
+            .ThenBy(x => x.JoinedAt)
+            .ToListAsync();
+
+        var rank = 1;
+        foreach (var p in participants)
+        {
+            p.Rank = rank++;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return participants.Select(x => new LeaderboardItemDto
+        {
+            ParticipantId = x.Id,
+            DisplayName = x.DisplayName,
+            TotalScore = x.TotalScore,
+            Rank = x.Rank ?? 0
+        }).ToList();
+    }
+
+    public async Task<ParticipantJoinStatusDto?> GetParticipantStatusAsync(int sessionId, int participantId, string? participantToken)
+    {
+        var participant = await _context.Set<GameParticipant>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.GameSessionId == sessionId && x.Id == participantId && !x.IsDeleted);
+
+        if (participant is null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(participantToken) &&
+            !string.Equals(participant.ParticipantToken, participantToken, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return new ParticipantJoinStatusDto
+        {
+            ParticipantId = participant.Id,
+            SessionId = sessionId,
+            DisplayName = participant.DisplayName,
+            JoinStatus = participant.JoinStatus,
+            DecisionNote = participant.DecisionNote
+        };
+    }
+
+    public async Task<bool> LeaveSessionAsync(int sessionId, LeaveSessionDto dto)
+    {
+        if (dto.ParticipantId <= 0 || string.IsNullOrWhiteSpace(dto.ParticipantToken))
+        {
+            return false;
+        }
+
+        var participant = await _context.Set<GameParticipant>()
+            .FirstOrDefaultAsync(x =>
+                x.GameSessionId == sessionId &&
+                x.Id == dto.ParticipantId &&
+                !x.IsDeleted &&
+                x.ParticipantToken == dto.ParticipantToken);
+
+        if (participant is null)
+        {
+            return false;
+        }
+
+        participant.IsConnected = false;
+        participant.JoinStatus = ParticipantJoinStatus.Left;
+        participant.LeftAt = DateTime.UtcNow;
+        participant.DecisionNote = "Player left the session";
+
+        await _context.SaveChangesAsync();
+
+        await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("participantLeft", new
+        {
+            sessionId,
+            participantId = participant.Id,
+            displayName = participant.DisplayName
+        });
+
+        var waitingRoom = await GetWaitingRoomAsync(sessionId);
+        if (waitingRoom is not null)
+        {
+            await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("waitingRoomUpdated", waitingRoom);
+        }
+
+        var leaderboard = await GetLeaderboardAsync(sessionId);
+        await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("leaderboardUpdated", leaderboard);
+
+        await BroadcastSessionUpdatedAsync(sessionId);
+        return true;
+    }
+
+    public async Task<ParticipantResultDto?> GetResultAsync(int sessionId, int participantId)
+    {
+        var participant = await _context.Set<GameParticipant>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.GameSessionId == sessionId && x.Id == participantId && !x.IsDeleted);
+
+        if (participant is null)
+        {
+            return null;
+        }
+
+        var answers = await _context.Set<PlayerAnswer>()
+            .AsNoTracking()
+            .Where(x => x.GameSessionId == sessionId && x.ParticipantId == participantId && !x.IsDeleted)
+            .ToListAsync();
+
+        return new ParticipantResultDto
+        {
+            ParticipantId = participant.Id,
+            DisplayName = participant.DisplayName,
+            TotalScore = participant.TotalScore,
+            CorrectAnswers = answers.Count(x => x.IsCorrect),
+            WrongAnswers = answers.Count(x => !x.IsCorrect),
+            AverageResponseTimeMs = answers.Count == 0 ? 0 : answers.Average(x => x.ResponseTimeMs ?? 0)
+        };
+    }
+
+    private static bool EvaluateAnswer(Question question, SubmitPlayerAnswerDto dto)
+    {
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            var expected = question.Choices.FirstOrDefault(x => x.IsCorrect)?.ChoiceText;
+            return !string.IsNullOrWhiteSpace(expected)
+                && !string.IsNullOrWhiteSpace(dto.TextAnswer)
+                && string.Equals(expected.Trim(), dto.TextAnswer.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!dto.SelectedChoiceId.HasValue)
+        {
+            return false;
+        }
+
+        var choice = question.Choices.FirstOrDefault(x => x.Id == dto.SelectedChoiceId.Value);
+        return choice?.IsCorrect == true;
+    }
+
+    private async Task BroadcastSessionUpdatedAsync(int sessionId)
+    {
+        var session = await _context.Set<GameSession>()
+            .AsNoTracking()
+            .Include(x => x.Quiz)
+            .Include(x => x.Participants)
+            .FirstOrDefaultAsync(x => x.Id == sessionId && !x.IsDeleted);
+
+        if (session is null)
+        {
+            return;
+        }
+
+        var payload = new GameSessionResponseDto
+        {
+            Id = session.Id,
+            QuizId = session.QuizId,
+            QuizTitle = session.Quiz.Title,
+            HostId = session.HostId,
+            JoinCode = session.JoinCode,
+            JoinLink = session.JoinLink,
+            Status = session.Status,
+            QuestionFlowMode = session.QuestionFlowMode,
+            CurrentQuestionIndex = session.CurrentQuestionIndex,
+            StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt,
+            CreatedAt = session.CreatedAt,
+            ParticipantsCount = session.Participants.Count(IsApprovedParticipant)
+        };
+
+        await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("sessionUpdated", payload);
+        await _hubContext.Clients.Group(GetGlobalGroupName()).SendAsync("sessionsUpdated", payload);
+    }
+
+    private static bool IsApprovedParticipant(GameParticipant participant)
+    {
+        return !participant.IsDeleted && participant.JoinStatus == ParticipantJoinStatus.Approved;
+    }
+
+    private static PlayerAnswerSubmitResponseDto Rejected(string message)
+    {
+        return new PlayerAnswerSubmitResponseDto
+        {
+            Accepted = false,
+            IsCorrect = false,
+            SelectedChoiceId = null,
+            CorrectChoiceId = null,
+            Message = message
+        };
+    }
+
+    private static string GetGlobalGroupName() => "sessions";
+    private static string GetGroupName(int sessionId) => $"session-{sessionId}";
+}

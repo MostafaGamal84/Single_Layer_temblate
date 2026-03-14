@@ -1,0 +1,771 @@
+using API.Data;
+using API.DTOs.QuizGame;
+using API.Entities.QuizGame;
+using API.Interfaces.QuizGame;
+using Microsoft.EntityFrameworkCore;
+
+namespace API.Services.QuizGame;
+
+public class TestModeService : ITestModeService
+{
+    private readonly DataContext _context;
+
+    public TestModeService(DataContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<TestAttemptResponseDto?> StartAsync(int quizId, int? userId, StartTestAttemptDto dto)
+    {
+        var quiz = await _context.Set<Quiz>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == quizId && !x.IsDeleted && x.Mode == QuizMode.Test && x.IsPublished);
+
+        if (quiz is null)
+        {
+            return null;
+        }
+
+        var attempt = new QuizAttempt
+        {
+            QuizId = quizId,
+            UserId = userId,
+            ParticipantName = dto.ParticipantName,
+            StartedAt = DateTime.UtcNow,
+            IsFinished = false,
+            TotalScore = 0,
+            CurrentQuestionIndex = 0,
+            IsDeleted = false
+        };
+
+        _context.Set<QuizAttempt>().Add(attempt);
+        await _context.SaveChangesAsync();
+
+        return new TestAttemptResponseDto
+        {
+            AttemptId = attempt.Id,
+            QuizId = attempt.QuizId,
+            CurrentQuestionIndex = attempt.CurrentQuestionIndex,
+            IsFinished = attempt.IsFinished
+        };
+    }
+
+    public async Task<TestAttemptOverviewDto?> GetAttemptOverviewAsync(int attemptId)
+    {
+        var attempt = await _context.Set<QuizAttempt>()
+            .AsNoTracking()
+            .Include(x => x.Quiz)
+            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+
+        if (attempt is null)
+        {
+            return null;
+        }
+
+        var orderedQuestions = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Include(x => x.Question)
+            .Where(x => x.QuizId == attempt.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .ToListAsync();
+
+        var answeredQuestionIds = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .Select(x => x.QuestionId)
+            .ToListAsync();
+
+        var answeredSet = answeredQuestionIds.ToHashSet();
+        var totalQuestions = orderedQuestions.Count;
+        var currentIndex = ResolveOverviewQuestionIndex(attempt.CurrentQuestionIndex, orderedQuestions, answeredSet);
+
+        return new TestAttemptOverviewDto
+        {
+            AttemptId = attempt.Id,
+            QuizId = attempt.QuizId,
+            QuizTitle = attempt.Quiz.Title,
+            IsFinished = attempt.IsFinished,
+            DurationMinutes = attempt.Quiz.DurationMinutes,
+            CurrentQuestionIndex = currentIndex,
+            TotalQuestions = totalQuestions,
+            AnsweredQuestions = answeredSet.Count,
+            RemainingQuestions = Math.Max(0, totalQuestions - answeredSet.Count),
+            Questions = orderedQuestions.Select((qq, index) => new TestAttemptQuestionItemDto
+            {
+                QuestionIndex = index,
+                QuestionId = qq.QuestionId,
+                Title = qq.Question?.Title ?? $"Question {index + 1}",
+                IsAnswered = answeredSet.Contains(qq.QuestionId),
+                IsCurrent = index == currentIndex
+            }).ToList()
+        };
+    }
+
+    public async Task<List<TestModeQuestionDto>> GetQuestionsAsync(int attemptId)
+    {
+        var attempt = await _context.Set<QuizAttempt>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+
+        if (attempt is null)
+        {
+            return new List<TestModeQuestionDto>();
+        }
+
+        var orderedQuestions = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => x.QuizId == attempt.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .Include(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
+            .ToListAsync();
+
+        if (!orderedQuestions.Any())
+        {
+            return new List<TestModeQuestionDto>();
+        }
+
+        var answers = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .ToListAsync();
+
+        var answersLookup = answers.ToDictionary(x => x.QuestionId, x => x);
+
+        return orderedQuestions
+            .Select((quizQuestion, index) => MapTestQuestion(
+                attempt.IsFinished,
+                quizQuestion,
+                answersLookup.TryGetValue(quizQuestion.QuestionId, out var answer) ? answer : null,
+                index,
+                orderedQuestions.Count))
+            .ToList();
+    }
+
+    public async Task<TestModeQuestionDto?> GetCurrentQuestionAsync(int attemptId, int? questionIndex = null)
+    {
+        var attempt = await _context.Set<QuizAttempt>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+
+        if (attempt is null)
+        {
+            return null;
+        }
+
+        var orderedQuestions = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => x.QuizId == attempt.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .Include(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
+            .ToListAsync();
+
+        if (!orderedQuestions.Any())
+        {
+            return null;
+        }
+
+        var answeredQuestionIds = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .Select(x => x.QuestionId)
+            .ToListAsync();
+
+        var answeredSet = answeredQuestionIds.ToHashSet();
+        int? resolvedIndex = questionIndex.HasValue
+            ? ResolveRequestedQuestionIndex(questionIndex.Value, orderedQuestions.Count)
+            : ResolveDefaultQuestionIndex(attempt.CurrentQuestionIndex, orderedQuestions, answeredSet);
+
+        if (!resolvedIndex.HasValue)
+        {
+            return null;
+        }
+
+        var quizQuestion = orderedQuestions[resolvedIndex.Value];
+        var answer = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.QuizAttemptId == attemptId && x.QuestionId == quizQuestion.QuestionId && !x.IsDeleted);
+
+        return MapTestQuestion(attempt.IsFinished, quizQuestion, answer, resolvedIndex.Value, orderedQuestions.Count);
+    }
+
+    public async Task<TestAnswerSubmitResponseDto> SubmitAnswerAsync(int attemptId, SubmitTestAnswerDto dto)
+    {
+        var attempt = await _context.Set<QuizAttempt>().FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+        if (attempt is null || attempt.IsFinished)
+        {
+            return Rejected("Attempt is not active.");
+        }
+
+        var orderedQuestions = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => x.QuizId == attempt.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .ToListAsync();
+
+        var currentQuizQuestion = orderedQuestions.FirstOrDefault(x => x.QuestionId == dto.QuestionId);
+        if (currentQuizQuestion is null)
+        {
+            return Rejected("Question not found in this attempt.");
+        }
+
+        var question = await _context.Set<Question>()
+            .Include(x => x.Choices.Where(c => !c.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == dto.QuestionId && !x.IsDeleted);
+
+        if (question is null)
+        {
+            return Rejected("Question not found.");
+        }
+
+        var validationMessage = ValidateSubmission(question, dto);
+        if (!string.IsNullOrWhiteSpace(validationMessage))
+        {
+            return Rejected(validationMessage);
+        }
+
+        var existingAnswer = await _context.Set<QuizAttemptAnswer>()
+            .FirstOrDefaultAsync(x => x.QuizAttemptId == attemptId && x.QuestionId == dto.QuestionId && !x.IsDeleted);
+
+        var isCorrect = EvaluateAnswer(question, dto);
+        var score = isCorrect ? (currentQuizQuestion.PointsOverride ?? question.Points) : 0;
+
+        if (existingAnswer is null)
+        {
+            _context.Set<QuizAttemptAnswer>().Add(new QuizAttemptAnswer
+            {
+                QuizAttemptId = attemptId,
+                QuestionId = dto.QuestionId,
+                SelectedChoiceId = question.Type == QuestionType.ShortAnswer ? null : dto.SelectedChoiceId,
+                TextAnswer = question.Type == QuestionType.ShortAnswer ? dto.TextAnswer?.Trim() : null,
+                IsCorrect = isCorrect,
+                ScoreAwarded = score,
+                AnsweredAt = DateTime.UtcNow,
+                IsDeleted = false
+            });
+        }
+        else
+        {
+            existingAnswer.SelectedChoiceId = question.Type == QuestionType.ShortAnswer ? null : dto.SelectedChoiceId;
+            existingAnswer.TextAnswer = question.Type == QuestionType.ShortAnswer ? dto.TextAnswer?.Trim() : null;
+            existingAnswer.IsCorrect = isCorrect;
+            existingAnswer.ScoreAwarded = score;
+            existingAnswer.AnsweredAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+
+        var answeredQuestionIds = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .Select(x => x.QuestionId)
+            .ToListAsync();
+
+        attempt.TotalScore = await _context.Set<QuizAttemptAnswer>()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .SumAsync(x => (int?)x.ScoreAwarded) ?? 0;
+
+        var answeredSet = answeredQuestionIds.ToHashSet();
+        var nextIndex = FindNextUnansweredQuestionIndex(orderedQuestions, answeredSet, dto.QuestionId);
+        var currentIndex = orderedQuestions.FindIndex(x => x.QuestionId == dto.QuestionId);
+        attempt.CurrentQuestionIndex = nextIndex ?? Math.Max(currentIndex, 0);
+
+        await _context.SaveChangesAsync();
+
+        return new TestAnswerSubmitResponseDto
+        {
+            Accepted = true,
+            IsCorrect = null,
+            SelectedChoiceId = question.Type == QuestionType.ShortAnswer ? null : dto.SelectedChoiceId,
+            CorrectChoiceId = null,
+            NextQuestionIndex = nextIndex,
+            AnsweredQuestions = answeredSet.Count,
+            RemainingQuestions = Math.Max(0, orderedQuestions.Count - answeredSet.Count),
+            Message = existingAnswer is null ? "Answer saved" : "Answer updated"
+        };
+    }
+
+    public async Task<TestResultDto?> FinishAsync(int attemptId, FinishTestAttemptDto dto)
+    {
+        var attempt = await _context.Set<QuizAttempt>().FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+        if (attempt is null)
+        {
+            return null;
+        }
+
+        if (attempt.IsFinished)
+        {
+            return await GetResultAsync(attemptId);
+        }
+
+        var orderedQuestions = await _context.Set<QuizQuestion>()
+            .Where(x => x.QuizId == attempt.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .Include(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
+            .ToListAsync();
+
+        var questionsById = orderedQuestions.ToDictionary(x => x.QuestionId, x => x);
+        var existingAnswers = await _context.Set<QuizAttemptAnswer>()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .ToListAsync();
+        var existingAnswersByQuestionId = existingAnswers.ToDictionary(x => x.QuestionId, x => x);
+        var submittedQuestionIds = new HashSet<int>();
+
+        var submittedAnswers = (dto.Answers ?? new List<SubmitTestAnswerDto>())
+            .Where(x => x.QuestionId > 0)
+            .GroupBy(x => x.QuestionId)
+            .Select(g => g.Last())
+            .ToList();
+
+        foreach (var submission in submittedAnswers)
+        {
+            if (!questionsById.TryGetValue(submission.QuestionId, out var quizQuestion))
+            {
+                continue;
+            }
+
+            var question = quizQuestion.Question;
+            if (!TryNormalizeFinishAnswer(question, submission, out var normalizedChoiceId, out var normalizedTextAnswer))
+            {
+                continue;
+            }
+
+            submittedQuestionIds.Add(submission.QuestionId);
+
+            var normalizedSubmission = new SubmitTestAnswerDto
+            {
+                QuestionId = submission.QuestionId,
+                SelectedChoiceId = normalizedChoiceId,
+                TextAnswer = normalizedTextAnswer
+            };
+
+            var isCorrect = EvaluateAnswer(question, normalizedSubmission);
+            var score = isCorrect ? (quizQuestion.PointsOverride ?? question.Points) : 0;
+
+            if (!existingAnswersByQuestionId.TryGetValue(submission.QuestionId, out var answer))
+            {
+                answer = new QuizAttemptAnswer
+                {
+                    QuizAttemptId = attemptId,
+                    QuestionId = submission.QuestionId,
+                    SelectedChoiceId = normalizedChoiceId,
+                    TextAnswer = normalizedTextAnswer,
+                    IsCorrect = isCorrect,
+                    ScoreAwarded = score,
+                    AnsweredAt = DateTime.UtcNow,
+                    IsDeleted = false
+                };
+
+                _context.Set<QuizAttemptAnswer>().Add(answer);
+                existingAnswers.Add(answer);
+                existingAnswersByQuestionId[submission.QuestionId] = answer;
+                continue;
+            }
+
+            answer.IsDeleted = false;
+            answer.SelectedChoiceId = normalizedChoiceId;
+            answer.TextAnswer = normalizedTextAnswer;
+            answer.IsCorrect = isCorrect;
+            answer.ScoreAwarded = score;
+            answer.AnsweredAt = DateTime.UtcNow;
+        }
+
+        foreach (var answer in existingAnswers)
+        {
+            if (submittedQuestionIds.Contains(answer.QuestionId))
+            {
+                continue;
+            }
+
+            answer.IsDeleted = true;
+        }
+
+        attempt.TotalScore = existingAnswers.Where(x => !x.IsDeleted).Sum(x => x.ScoreAwarded);
+        attempt.IsFinished = true;
+        attempt.EndedAt = DateTime.UtcNow;
+        attempt.CurrentQuestionIndex = orderedQuestions.Count > 0 ? orderedQuestions.Count - 1 : 0;
+
+        await _context.SaveChangesAsync();
+        return await GetResultAsync(attemptId);
+    }
+    public async Task<TestResultDto?> GetResultAsync(int attemptId)
+    {
+        var attempt = await _context.Set<QuizAttempt>()
+            .AsNoTracking()
+            .Include(x => x.Quiz)
+            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+
+        if (attempt is null)
+        {
+            return null;
+        }
+
+        var answers = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .Where(x => x.QuizAttemptId == attemptId && !x.IsDeleted)
+            .ToListAsync();
+
+        var orderedQuestions = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => x.QuizId == attempt.QuizId && !x.IsDeleted)
+            .OrderBy(x => x.Order)
+            .Include(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
+            .ToListAsync();
+
+        var answersLookup = answers.ToDictionary(x => x.QuestionId, x => x);
+        var totalQuestions = orderedQuestions.Count;
+        var correctAnswers = answers.Count(x => x.IsCorrect);
+        var answeredQuestions = answers.Count;
+        var wrongAnswers = Math.Max(0, totalQuestions - correctAnswers);
+        var accuracyPercent = totalQuestions == 0 ? 0 : (double)correctAnswers / totalQuestions * 100.0;
+        int? durationSeconds = attempt.EndedAt.HasValue
+            ? Math.Max(0, (int)Math.Round((attempt.EndedAt.Value - attempt.StartedAt).TotalSeconds))
+            : null;
+
+        var reviewQuestions = orderedQuestions
+            .Select((quizQuestion, index) => BuildQuestionReview(
+                index,
+                quizQuestion,
+                answersLookup.TryGetValue(quizQuestion.QuestionId, out var answer) ? answer : null))
+            .ToList();
+
+        var incorrectQuestions = reviewQuestions
+            .Where(x => !x.IsCorrect)
+            .ToList();
+
+        return new TestResultDto
+        {
+            AttemptId = attempt.Id,
+            QuizId = attempt.QuizId,
+            QuizTitle = attempt.Quiz.Title,
+            ParticipantName = attempt.ParticipantName,
+            TotalScore = attempt.TotalScore,
+            TotalQuestions = totalQuestions,
+            AnsweredQuestions = answeredQuestions,
+            UnansweredQuestions = Math.Max(0, totalQuestions - answeredQuestions),
+            CorrectAnswers = correctAnswers,
+            WrongAnswers = wrongAnswers,
+            AccuracyPercent = accuracyPercent,
+            StartedAt = attempt.StartedAt,
+            EndedAt = attempt.EndedAt,
+            DurationSeconds = durationSeconds,
+            ReviewQuestions = reviewQuestions,
+            IncorrectQuestions = incorrectQuestions
+        };
+    }
+
+    public async Task<IEnumerable<PlayerTestHistoryItemDto>> GetMyHistoryAsync(int userId)
+    {
+        var attempts = await _context.Set<QuizAttempt>()
+            .AsNoTracking()
+            .Include(x => x.Quiz)
+            .Where(x => x.UserId == userId && !x.IsDeleted && x.IsFinished)
+            .OrderByDescending(x => x.EndedAt ?? x.StartedAt)
+            .ToListAsync();
+
+        if (!attempts.Any())
+        {
+            return Enumerable.Empty<PlayerTestHistoryItemDto>();
+        }
+
+        var attemptIds = attempts.Select(x => x.Id).ToList();
+        var quizIds = attempts.Select(x => x.QuizId).Distinct().ToList();
+
+        var answerStats = await _context.Set<QuizAttemptAnswer>()
+            .AsNoTracking()
+            .Where(x => attemptIds.Contains(x.QuizAttemptId) && !x.IsDeleted)
+            .GroupBy(x => x.QuizAttemptId)
+            .Select(g => new
+            {
+                AttemptId = g.Key,
+                Answered = g.Count(),
+                Correct = g.Count(x => x.IsCorrect),
+                Wrong = g.Count(x => !x.IsCorrect)
+            })
+            .ToListAsync();
+
+        var questionStats = await _context.Set<QuizQuestion>()
+            .AsNoTracking()
+            .Where(x => quizIds.Contains(x.QuizId) && !x.IsDeleted)
+            .GroupBy(x => x.QuizId)
+            .Select(g => new
+            {
+                QuizId = g.Key,
+                Count = g.Count()
+            })
+            .ToListAsync();
+
+        var answersLookup = answerStats.ToDictionary(x => x.AttemptId, x => x);
+        var questionLookup = questionStats.ToDictionary(x => x.QuizId, x => x.Count);
+
+        return attempts.Select(attempt =>
+        {
+            answersLookup.TryGetValue(attempt.Id, out var stats);
+            var answered = stats?.Answered ?? 0;
+            var correct = stats?.Correct ?? 0;
+            var totalQuestions = questionLookup.TryGetValue(attempt.QuizId, out var count) ? count : 0;
+            var wrong = Math.Max(0, totalQuestions - correct);
+            var accuracyPercent = totalQuestions == 0 ? 0 : (double)correct / totalQuestions * 100.0;
+            int? durationSeconds = attempt.EndedAt.HasValue
+                ? Math.Max(0, (int)Math.Round((attempt.EndedAt.Value - attempt.StartedAt).TotalSeconds))
+                : null;
+
+            return new PlayerTestHistoryItemDto
+            {
+                AttemptId = attempt.Id,
+                QuizId = attempt.QuizId,
+                QuizTitle = attempt.Quiz.Title,
+                ParticipantName = attempt.ParticipantName,
+                TotalScore = attempt.TotalScore,
+                TotalQuestions = totalQuestions,
+                AnsweredQuestions = answered,
+                CorrectAnswers = correct,
+                WrongAnswers = wrong,
+                AccuracyPercent = accuracyPercent,
+                StartedAt = attempt.StartedAt,
+                EndedAt = attempt.EndedAt,
+                DurationSeconds = durationSeconds
+            };
+        }).ToList();
+    }
+
+    private static bool TryNormalizeFinishAnswer(Question question, SubmitTestAnswerDto dto, out int? selectedChoiceId, out string? textAnswer)
+    {
+        selectedChoiceId = null;
+        textAnswer = null;
+
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            var trimmed = dto.TextAnswer?.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return false;
+            }
+
+            textAnswer = trimmed;
+            return true;
+        }
+
+        if (!dto.SelectedChoiceId.HasValue)
+        {
+            return false;
+        }
+
+        var selectedChoice = question.Choices.FirstOrDefault(x => x.Id == dto.SelectedChoiceId.Value);
+        if (selectedChoice is null)
+        {
+            return false;
+        }
+
+        selectedChoiceId = selectedChoice.Id;
+        return true;
+    }
+
+    private static string? ValidateSubmission(Question question, SubmitTestAnswerDto dto)
+    {
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            return string.IsNullOrWhiteSpace(dto.TextAnswer) ? "Please write your answer first." : null;
+        }
+
+        if (!dto.SelectedChoiceId.HasValue)
+        {
+            return "Please select an answer first.";
+        }
+
+        var isValidChoice = question.Choices.Any(x => x.Id == dto.SelectedChoiceId.Value);
+        return isValidChoice ? null : "Selected answer is invalid for this question.";
+    }
+
+    private static TestModeQuestionDto MapTestQuestion(bool isAttemptFinished, QuizQuestion quizQuestion, QuizAttemptAnswer? answer, int questionIndex, int totalQuestions)
+    {
+        var question = quizQuestion.Question;
+        var correctChoiceId = !isAttemptFinished || question.Type == QuestionType.ShortAnswer
+            ? null
+            : question.Choices.OrderBy(x => x.Order).FirstOrDefault(x => x.IsCorrect)?.Id;
+
+        return new TestModeQuestionDto
+        {
+            QuestionIndex = questionIndex,
+            TotalQuestions = totalQuestions,
+            IsAnswered = answer is not null,
+            SelectedChoiceId = answer?.SelectedChoiceId,
+            TextAnswer = answer?.TextAnswer,
+            IsCorrect = isAttemptFinished ? answer?.IsCorrect : null,
+            CorrectChoiceId = correctChoiceId,
+            Question = new QuestionResponseDto
+            {
+                Id = question.Id,
+                Title = question.Title,
+                Text = question.Text,
+                Type = question.Type,
+                Difficulty = question.Difficulty,
+                Points = quizQuestion.PointsOverride ?? question.Points,
+                AnswerSeconds = quizQuestion.AnswerSeconds > 0 ? quizQuestion.AnswerSeconds : question.AnswerSeconds,
+                CreatedBy = question.CreatedBy,
+                CreatedAt = question.CreatedAt,
+                Choices = question.Type == QuestionType.ShortAnswer
+                    ? new List<QuestionChoiceDto>()
+                    : question.Choices.OrderBy(c => c.Order).Select(c => new QuestionChoiceDto
+                    {
+                        Id = c.Id,
+                        ChoiceText = c.ChoiceText,
+                        IsCorrect = false,
+                        Order = c.Order
+                    }).ToList()
+            }
+        };
+    }
+
+    private static int ResolveOverviewQuestionIndex(int storedIndex, IReadOnlyList<QuizQuestion> orderedQuestions, HashSet<int> answeredQuestionIds)
+    {
+        if (!orderedQuestions.Any())
+        {
+            return 0;
+        }
+
+        if (storedIndex >= 0 && storedIndex < orderedQuestions.Count)
+        {
+            return storedIndex;
+        }
+
+        var firstUnanswered = FindFirstUnansweredQuestionIndex(orderedQuestions, answeredQuestionIds);
+        return firstUnanswered ?? Math.Max(0, orderedQuestions.Count - 1);
+    }
+
+    private static int? ResolveDefaultQuestionIndex(int storedIndex, IReadOnlyList<QuizQuestion> orderedQuestions, HashSet<int> answeredQuestionIds)
+    {
+        if (!orderedQuestions.Any())
+        {
+            return null;
+        }
+
+        if (storedIndex >= 0 && storedIndex < orderedQuestions.Count)
+        {
+            return storedIndex;
+        }
+
+        return FindFirstUnansweredQuestionIndex(orderedQuestions, answeredQuestionIds);
+    }
+
+    private static int? ResolveRequestedQuestionIndex(int questionIndex, int totalQuestions)
+    {
+        if (questionIndex < 0 || questionIndex >= totalQuestions)
+        {
+            return null;
+        }
+
+        return questionIndex;
+    }
+
+    private static int? FindFirstUnansweredQuestionIndex(IReadOnlyList<QuizQuestion> orderedQuestions, HashSet<int> answeredQuestionIds)
+    {
+        for (var i = 0; i < orderedQuestions.Count; i++)
+        {
+            if (!answeredQuestionIds.Contains(orderedQuestions[i].QuestionId))
+            {
+                return i;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? FindNextUnansweredQuestionIndex(IReadOnlyList<QuizQuestion> orderedQuestions, HashSet<int> answeredQuestionIds, int currentQuestionId)
+    {
+        if (!orderedQuestions.Any())
+        {
+            return null;
+        }
+
+        var currentIndex = orderedQuestions.Select((qq, index) => new { qq.QuestionId, Index = index })
+            .FirstOrDefault(x => x.QuestionId == currentQuestionId)?.Index ?? -1;
+
+        if (currentIndex < 0)
+        {
+            return FindFirstUnansweredQuestionIndex(orderedQuestions, answeredQuestionIds);
+        }
+
+        for (var offset = 1; offset <= orderedQuestions.Count; offset++)
+        {
+            var index = (currentIndex + offset) % orderedQuestions.Count;
+            if (!answeredQuestionIds.Contains(orderedQuestions[index].QuestionId))
+            {
+                return index;
+            }
+        }
+
+        return null;
+    }
+
+    private static TestResultReviewItemDto BuildQuestionReview(int questionIndex, QuizQuestion quizQuestion, QuizAttemptAnswer? answer)
+    {
+        var question = quizQuestion.Question;
+        var orderedChoices = question.Choices.OrderBy(x => x.Order).ToList();
+        var selectedAnswerText = question.Type == QuestionType.ShortAnswer
+            ? answer?.TextAnswer?.Trim()
+            : orderedChoices.FirstOrDefault(x => x.Id == answer?.SelectedChoiceId)?.ChoiceText;
+        var correctAnswerText = orderedChoices.FirstOrDefault(x => x.IsCorrect)?.ChoiceText ?? string.Empty;
+
+        return new TestResultReviewItemDto
+        {
+            QuestionIndex = questionIndex,
+            QuestionId = question.Id,
+            QuestionTitle = question.Title,
+            QuestionText = question.Text,
+            IsAnswered = answer is not null,
+            IsCorrect = answer?.IsCorrect == true,
+            SelectedAnswerText = string.IsNullOrWhiteSpace(selectedAnswerText) ? null : selectedAnswerText,
+            CorrectAnswerText = correctAnswerText
+        };
+    }
+
+    private static bool EvaluateAnswer(Question question, SubmitTestAnswerDto dto)
+    {
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            var expected = question.Choices.FirstOrDefault(x => x.IsCorrect)?.ChoiceText;
+            return !string.IsNullOrWhiteSpace(expected)
+                && !string.IsNullOrWhiteSpace(dto.TextAnswer)
+                && string.Equals(expected.Trim(), dto.TextAnswer.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!dto.SelectedChoiceId.HasValue)
+        {
+            return false;
+        }
+
+        var choice = question.Choices.FirstOrDefault(x => x.Id == dto.SelectedChoiceId.Value);
+        return choice?.IsCorrect == true;
+    }
+
+    private static TestAnswerSubmitResponseDto Rejected(string message)
+    {
+        return new TestAnswerSubmitResponseDto
+        {
+            Accepted = false,
+            IsCorrect = null,
+            SelectedChoiceId = null,
+            CorrectChoiceId = null,
+            NextQuestionIndex = null,
+            AnsweredQuestions = 0,
+            RemainingQuestions = 0,
+            Message = message
+        };
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+

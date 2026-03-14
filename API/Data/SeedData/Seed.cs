@@ -1,120 +1,84 @@
-using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text.Json;
-using System.Threading.Tasks;
 using API.Entities;
-using API.Entities.Auctions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
-namespace API.Data
+namespace API.Data;
+
+public static class Seed
 {
-    public class Seed
+    public static async Task SeedRoles(RoleManager<AppRole> roleManager)
     {
-
-        public static async Task SeedUsers(DataContext context)
+        var roles = new[] { "Admin", "Host", "Player" };
+        foreach (var role in roles)
         {
-
-            if (!await context.appUserTypes.AnyAsync())
+            if (!await roleManager.RoleExistsAsync(role))
             {
-                var data = await ReadData<AppUserType>("UserType");
-                await context.appUserTypes.AddRangeAsync(data);
-                await context.SaveChangesAsync();
+                await roleManager.CreateAsync(new AppRole { Name = role });
             }
-            
-             if (!await context.vehicleTypes.AnyAsync())
-            {
-                var data = await ReadData<VehicleType>("VehicleType");
-                await context.vehicleTypes.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-             if (!await context.keys.AnyAsync())
-            {
-                var data = await ReadData<Key>("Key");
-                await context.keys.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-             if (!await context.genders.AnyAsync())
-            {
-                var data = await ReadData<Gender>("Gender");
-                await context.genders.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-              if (!await context.models.AnyAsync())
-            {
-                var data = await ReadData<Model>("Model");
-                await context.models.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-             if (!await context.carStatuses.AnyAsync())
-            {
-                var data = await ReadData<CarStatus>("CarStatus");
-                await context.carStatuses.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-              if (!await context.colors.AnyAsync())
-            {
-                var data = await ReadData<Color>("Color");
-                await context.colors.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-            if (!await context.brandNames.AnyAsync())
-            {
-                var data = await ReadData<BrandName>("BrandName");
-                await context.brandNames.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-             if (!await context.carTypes.AnyAsync())
-            {
-                var data = await ReadData<CarType>("CarType");
-                await context.carTypes.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-             if (!await context.providerTypes.AnyAsync())
-            {
-                var data = await ReadData<ProviderType>("ProviderType");
-                await context.providerTypes.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-
-            if (!await context.termsAndConditions.AnyAsync())
-            {
-                var data = await ReadData<TermsAndConditions>("TermsAndConditions");
-                await context.termsAndConditions.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-
-            if (!await context.aboutUs.AnyAsync())
-            {
-                var data = await ReadData<AboutUs>("AboutUs");
-                await context.aboutUs.AddRangeAsync(data);
-                await context.SaveChangesAsync();
-            }
-            // if (!await context.Provider.AnyAsync())
-            // {
-            //     var data = await ReadData<AppUser>("Provider");
-            //     await context.Users.AddRangeAsync(data);
-            //     await context.SaveChangesAsync();
-            // }
-        }
-        
-        private static async Task<List<T>> ReadData<T>(string file)
-        {
-            var fileData = await System.IO.File.ReadAllTextAsync("Data/SeedData/" + file + ".json");
-            var data = JsonSerializer.Deserialize<List<T>>(fileData);
-            return data;
         }
     }
 
+    public static async Task SeedDefaultUsers(UserManager<AppUser> userManager)
+    {
+        if (!await userManager.Users.AnyAsync())
+        {
+            var admin = new AppUser
+            {
+                UserName = "admin",
+                Email = "admin@test.com",
+                FirstName = "System",
+                LastName = "Admin",
+                RegisterTime = DateTime.UtcNow,
+                EmailConfirmed = true
+            };
 
+            var host = new AppUser
+            {
+                UserName = "host",
+                Email = "host@test.com",
+                FirstName = "Default",
+                LastName = "Host",
+                RegisterTime = DateTime.UtcNow,
+                EmailConfirmed = true
+            };
+             var player = new AppUser
+            {
+                UserName = "player",
+                Email = "player@test.com",
+                FirstName = "Default",
+                LastName = "Player",
+                RegisterTime = DateTime.UtcNow,
+                EmailConfirmed = true
+            };
+                var player2 = new AppUser
+            {
+                UserName = "player2",
+                Email = "player2@test.com",
+                FirstName = "Default",
+                LastName = "Player",
+                RegisterTime = DateTime.UtcNow,
+                EmailConfirmed = true
+            };
+                var player3 = new AppUser
+            {
+                UserName = "player3",
+                Email = "player3@test.com",
+                FirstName = "Default",
+                LastName = "Player",
+                RegisterTime = DateTime.UtcNow,
+                EmailConfirmed = true
+            };
 
+            await userManager.CreateAsync(admin, "Admin@12345");
+            await userManager.CreateAsync(host, "Host@12345");
+            await userManager.CreateAsync(player, "Player@12345");
+            await userManager.CreateAsync(player2, "Player2@12345");
+            await userManager.CreateAsync(player3, "Player3@12345");
+            await userManager.AddToRoleAsync(admin, "Admin");
+            await userManager.AddToRoleAsync(host, "Host");
+            await userManager.AddToRoleAsync(player, "Player");
+            await userManager.AddToRoleAsync(player2, "Player");
+            await userManager.AddToRoleAsync(player3, "Player");
+        }
+    }
 }
-
-
-
-
-
-
-
-
-
-

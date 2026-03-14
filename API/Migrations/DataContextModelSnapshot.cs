@@ -17,32 +17,10 @@ namespace API.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "6.0.6")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
-
-            modelBuilder.Entity("API.Entities.AboutUs", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("aboutUs");
-                });
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("API.Entities.AppRole", b =>
                 {
@@ -50,7 +28,7 @@ namespace API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -80,17 +58,10 @@ namespace API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
-
-                    b.Property<int?>("AppUserTypeId")
-                        .IsRequired()
-                        .HasColumnType("int");
-
-                    b.Property<string>("Bank")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -117,9 +88,6 @@ namespace API.Migrations
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("MobileNumber")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
@@ -153,8 +121,6 @@ namespace API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AppUserTypeId");
-
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
 
@@ -181,625 +147,414 @@ namespace API.Migrations
                     b.ToTable("AspNetUserRoles", (string)null);
                 });
 
-            modelBuilder.Entity("API.Entities.AppUserType", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.GameParticipant", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DecisionByHostId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("GameSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsConnected")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Name_ar")
+                    b.Property<int>("JoinStatus")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LeftAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ParticipantToken")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int?>("Rank")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TotalScore")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.ToTable("appUserTypes");
+                    b.HasIndex("GameSessionId", "DisplayName")
+                        .IsUnique();
+
+                    b.ToTable("GameParticipants");
                 });
 
-            modelBuilder.Entity("API.Entities.AuctionRecord", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.GameSession", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<double>("AppPercent")
-                        .HasColumnType("float");
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int>("AuctionId")
+                    b.Property<DateTime?>("CurrentQuestionEndsAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CurrentQuestionIndex")
                         .HasColumnType("int");
 
-                    b.Property<int>("ClientId")
+                    b.Property<int?>("CurrentQuestionRemainingSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("CurrentQuestionStartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("HostId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("JoinCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("JoinLink")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("QuestionFlowMode")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JoinCode")
+                        .IsUnique();
+
+                    b.HasIndex("QuizId");
+
+                    b.ToTable("GameSessions");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.PlayerAnswer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AnsweredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("GameSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ParticipantId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("ResponseTimeMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ScoreAwarded")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SelectedChoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TextAnswer")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameSessionId");
+
+                    b.HasIndex("ParticipantId");
+
+                    b.HasIndex("QuestionId");
+
+                    b.HasIndex("SelectedChoiceId");
+
+                    b.ToTable("PlayerAnswers");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.Question", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AnswerSeconds")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<double>("Percent")
-                        .HasColumnType("float");
-
-                    b.Property<double>("PlusOrMinus")
-                        .HasColumnType("float");
-
-                    b.Property<double>("Price")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AuctionId");
-
-                    b.HasIndex("ClientId");
-
-                    b.ToTable("AuctionRecord");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.BrandName", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int?>("CreatedBy")
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("brandNames");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.CarCommetion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<int>("AuctionId")
-                        .HasColumnType("int");
-
-                    b.Property<double>("CarReportCommission")
-                        .HasColumnType("float");
-
-                    b.Property<int>("ClientId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AuctionId");
-
-                    b.HasIndex("ClientId");
-
-                    b.ToTable("carCommetions");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.CarStatus", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("carStatuses");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.CarType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("carTypes");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.Color", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("colors");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.Item", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<int>("BrandNameId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CarId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CarNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CarReport")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CarStatusId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CarSummary")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CarTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("City")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CityId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ColorId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("InitialPrice")
+                    b.Property<string>("Difficulty")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<int>("ModelId")
+                    b.Property<int>("Points")
                         .HasColumnType("int");
 
-                    b.Property<string>("OdoMeter")
+                    b.Property<string>("Text")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ReservePrice")
+                    b.Property<string>("Title")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("SlightestIncrease")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("VehicleTypeId")
+                    b.Property<int>("Type")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BrandNameId");
-
-                    b.HasIndex("CarStatusId");
-
-                    b.HasIndex("CarTypeId");
-
-                    b.HasIndex("ColorId");
-
-                    b.HasIndex("ModelId");
-
-                    b.HasIndex("VehicleTypeId");
-
-                    b.ToTable("items");
+                    b.ToTable("Questions");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.ItemPhoto", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuestionChoice", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ChoiceText")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<int>("ItemId")
+                    b.Property<int>("Order")
                         .HasColumnType("int");
 
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ItemId");
+                    b.HasIndex("QuestionId");
 
-                    b.ToTable("itemPhotos");
+                    b.ToTable("QuestionChoices");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.Model", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.Quiz", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("models");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.ProviderPhoto", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<string>("CommercialRecordPhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CompanyPhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IdentityPhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
+                    b.Property<bool>("IsPublished")
                         .HasColumnType("bit");
 
-                    b.Property<int>("ProviderId")
+                    b.Property<int>("Mode")
                         .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProviderId")
-                        .IsUnique();
-
-                    b.ToTable("providerPhotos");
+                    b.ToTable("Quizzes");
                 });
 
-            modelBuilder.Entity("API.Entities.Banners", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAttempt", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime>("EndAt")
+                    b.Property<int>("CurrentQuestionIndex")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Name_ar")
+                    b.Property<bool>("IsFinished")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ParticipantName")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int");
 
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("StartAt")
+                    b.Property<DateTime>("StartedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("TotalScore")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.ToTable("banners");
+                    b.HasIndex("QuizId");
+
+                    b.ToTable("QuizAttempts");
                 });
 
-            modelBuilder.Entity("API.Entities.FavoriteAuction", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAttemptAnswer", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AuctionId")
-                        .HasColumnType("int");
+                    b.Property<DateTime>("AnsweredAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int>("ClientId")
-                        .HasColumnType("int");
+                    b.Property<bool>("IsCorrect")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("Status")
-                        .HasColumnType("bit");
+                    b.Property<int>("QuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuizAttemptId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ScoreAwarded")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SelectedChoiceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TextAnswer")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AuctionId");
+                    b.HasIndex("QuestionId");
 
-                    b.HasIndex("ClientId");
+                    b.HasIndex("QuizAttemptId");
 
-                    b.ToTable("FavoriteAuctions");
+                    b.HasIndex("SelectedChoiceId");
+
+                    b.ToTable("QuizAttemptAnswers");
                 });
 
-            modelBuilder.Entity("API.Entities.Gender", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuizQuestion", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("genders");
-                });
-
-            modelBuilder.Entity("API.Entities.Insurance", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<string>("Descripe")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("insurances");
-                });
-
-            modelBuilder.Entity("API.Entities.Key", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Value")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("keys");
-                });
-
-            modelBuilder.Entity("API.Entities.ProviderType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("providerTypes");
-                });
-
-            modelBuilder.Entity("API.Entities.Repair", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<string>("Descripe")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("repairs");
-                });
-
-            modelBuilder.Entity("API.Entities.Subscribe", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<int>("AuctioningCount")
+                    b.Property<int>("AnswerSeconds")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<double>("Price")
-                        .HasColumnType("float");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Subscribes");
-                });
-
-            modelBuilder.Entity("API.Entities.TermsAndConditions", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int>("Order")
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("termsAndConditions");
-                });
-
-            modelBuilder.Entity("API.Entities.VehicleType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int?>("PointsOverride")
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("vehicleTypes");
-                });
-
-            modelBuilder.Entity("API.Entities.Warranty", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<int>("QuestionId")
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
-
-                    b.Property<string>("Descripe")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("LinkUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_ar")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Name_en")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.ToTable("warranties");
+                    b.HasIndex("QuestionId");
+
+                    b.HasIndex("QuizId");
+
+                    b.ToTable("QuizQuestions");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -808,7 +563,7 @@ namespace API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
                         .HasColumnType("nvarchar(max)");
@@ -832,7 +587,7 @@ namespace API.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("ClaimType")
                         .HasColumnType("nvarchar(max)");
@@ -890,128 +645,6 @@ namespace API.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("API.Entities.Admin", b =>
-                {
-                    b.HasBaseType("API.Entities.AppUser");
-
-                    b.ToTable("Admin");
-                });
-
-            modelBuilder.Entity("API.Entities.Auction", b =>
-                {
-                    b.HasBaseType("API.Entities.Auctions.Item");
-
-                    b.Property<int?>("AdminId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("EndAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("Expired")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsApproved")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("ProviderId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("StartAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasIndex("AdminId");
-
-                    b.HasIndex("ProviderId");
-
-                    b.ToTable("Auction");
-                });
-
-            modelBuilder.Entity("API.Entities.Client", b =>
-                {
-                    b.HasBaseType("API.Entities.AppUser");
-
-                    b.Property<string>("City")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DateOfBirth")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IbanNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IdentityNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IdentityPhotoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Nationality")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("SubscribeCount")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("SubscribeId")
-                        .HasColumnType("int");
-
-                    b.HasIndex("SubscribeId");
-
-                    b.ToTable("Client");
-                });
-
-            modelBuilder.Entity("API.Entities.Provider", b =>
-                {
-                    b.HasBaseType("API.Entities.AppUser");
-
-                    b.Property<string>("AboutCompany")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("BankAccountNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("City")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CompanyServices")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CompanyWebSite")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IbanNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("IdentityNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsApproved")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPending")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Nationality")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("ProviderTypeId")
-                        .HasColumnType("int");
-
-                    b.HasIndex("ProviderTypeId");
-
-                    b.ToTable("Provider");
-                });
-
-            modelBuilder.Entity("API.Entities.AppUser", b =>
-                {
-                    b.HasOne("API.Entities.AppUserType", "AppUserType")
-                        .WithMany("Users")
-                        .HasForeignKey("AppUserTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AppUserType");
-                });
-
             modelBuilder.Entity("API.Entities.AppUserRole", b =>
                 {
                     b.HasOne("API.Entities.AppRole", "Role")
@@ -1031,134 +664,127 @@ namespace API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("API.Entities.AuctionRecord", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.GameParticipant", b =>
                 {
-                    b.HasOne("API.Entities.Auction", "Auction")
-                        .WithMany("AuctionRecords")
-                        .HasForeignKey("AuctionId")
+                    b.HasOne("API.Entities.QuizGame.GameSession", "GameSession")
+                        .WithMany("Participants")
+                        .HasForeignKey("GameSessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("API.Entities.Client", "Client")
-                        .WithMany("AuctionRecords")
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("Auction");
-
-                    b.Navigation("Client");
+                    b.Navigation("GameSession");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.CarCommetion", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.GameSession", b =>
                 {
-                    b.HasOne("API.Entities.Auction", "Auction")
-                        .WithMany("CarCommetions")
-                        .HasForeignKey("AuctionId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("API.Entities.QuizGame.Quiz", "Quiz")
+                        .WithMany()
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("API.Entities.Client", "Client")
-                        .WithMany("CarCommetions")
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Auction");
-
-                    b.Navigation("Client");
+                    b.Navigation("Quiz");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.Item", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.PlayerAnswer", b =>
                 {
-                    b.HasOne("API.Entities.Auctions.BrandName", "BrandName")
-                        .WithMany("Item")
-                        .HasForeignKey("BrandNameId")
+                    b.HasOne("API.Entities.QuizGame.GameSession", "GameSession")
+                        .WithMany("Answers")
+                        .HasForeignKey("GameSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("API.Entities.QuizGame.GameParticipant", "Participant")
+                        .WithMany("Answers")
+                        .HasForeignKey("ParticipantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("API.Entities.Auctions.CarStatus", "CarStatus")
-                        .WithMany("Item")
-                        .HasForeignKey("CarStatusId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("API.Entities.QuizGame.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("API.Entities.Auctions.CarType", "CarType")
-                        .WithMany("Item")
-                        .HasForeignKey("CarTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.HasOne("API.Entities.QuizGame.QuestionChoice", "SelectedChoice")
+                        .WithMany()
+                        .HasForeignKey("SelectedChoiceId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("API.Entities.Auctions.Color", "Color")
-                        .WithMany("Item")
-                        .HasForeignKey("ColorId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("GameSession");
 
-                    b.HasOne("API.Entities.Auctions.Model", "Model")
-                        .WithMany("Item")
-                        .HasForeignKey("ModelId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("Participant");
 
-                    b.HasOne("API.Entities.VehicleType", "VehicleType")
-                        .WithMany("Item")
-                        .HasForeignKey("VehicleTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("Question");
 
-                    b.Navigation("BrandName");
-
-                    b.Navigation("CarStatus");
-
-                    b.Navigation("CarType");
-
-                    b.Navigation("Color");
-
-                    b.Navigation("Model");
-
-                    b.Navigation("VehicleType");
+                    b.Navigation("SelectedChoice");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.ItemPhoto", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuestionChoice", b =>
                 {
-                    b.HasOne("API.Entities.Auctions.Item", "Item")
-                        .WithMany("itemPhotos")
-                        .HasForeignKey("ItemId")
+                    b.HasOne("API.Entities.QuizGame.Question", "Question")
+                        .WithMany("Choices")
+                        .HasForeignKey("QuestionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Item");
+                    b.Navigation("Question");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.ProviderPhoto", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAttempt", b =>
                 {
-                    b.HasOne("API.Entities.Provider", "Provider")
-                        .WithOne("ProviderPhotos")
-                        .HasForeignKey("API.Entities.Auctions.ProviderPhoto", "ProviderId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("API.Entities.QuizGame.Quiz", "Quiz")
+                        .WithMany()
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Provider");
+                    b.Navigation("Quiz");
                 });
 
-            modelBuilder.Entity("API.Entities.FavoriteAuction", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAttemptAnswer", b =>
                 {
-                    b.HasOne("API.Entities.Auction", "Auction")
-                        .WithMany("FavoriteAuctions")
-                        .HasForeignKey("AuctionId")
+                    b.HasOne("API.Entities.QuizGame.Question", "Question")
+                        .WithMany()
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("API.Entities.QuizGame.QuizAttempt", "QuizAttempt")
+                        .WithMany("Answers")
+                        .HasForeignKey("QuizAttemptId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("API.Entities.Client", "Client")
-                        .WithMany("FavoriteAuctions")
-                        .HasForeignKey("ClientId")
-                        .OnDelete(DeleteBehavior.NoAction)
+                    b.HasOne("API.Entities.QuizGame.QuestionChoice", "SelectedChoice")
+                        .WithMany()
+                        .HasForeignKey("SelectedChoiceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Question");
+
+                    b.Navigation("QuizAttempt");
+
+                    b.Navigation("SelectedChoice");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizQuestion", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.Question", "Question")
+                        .WithMany("QuizQuestions")
+                        .HasForeignKey("QuestionId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Auction");
+                    b.HasOne("API.Entities.QuizGame.Quiz", "Quiz")
+                        .WithMany("QuizQuestions")
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Navigation("Client");
+                    b.Navigation("Question");
+
+                    b.Navigation("Quiz");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -1197,68 +823,6 @@ namespace API.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("API.Entities.Admin", b =>
-                {
-                    b.HasOne("API.Entities.AppUser", null)
-                        .WithOne()
-                        .HasForeignKey("API.Entities.Admin", "Id")
-                        .OnDelete(DeleteBehavior.ClientCascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("API.Entities.Auction", b =>
-                {
-                    b.HasOne("API.Entities.Admin", "Admin")
-                        .WithMany("Auctions")
-                        .HasForeignKey("AdminId");
-
-                    b.HasOne("API.Entities.Auctions.Item", null)
-                        .WithOne()
-                        .HasForeignKey("API.Entities.Auction", "Id")
-                        .OnDelete(DeleteBehavior.ClientCascade)
-                        .IsRequired();
-
-                    b.HasOne("API.Entities.Provider", "Provider")
-                        .WithMany("Auctions")
-                        .HasForeignKey("ProviderId");
-
-                    b.Navigation("Admin");
-
-                    b.Navigation("Provider");
-                });
-
-            modelBuilder.Entity("API.Entities.Client", b =>
-                {
-                    b.HasOne("API.Entities.AppUser", null)
-                        .WithOne()
-                        .HasForeignKey("API.Entities.Client", "Id")
-                        .OnDelete(DeleteBehavior.ClientCascade)
-                        .IsRequired();
-
-                    b.HasOne("API.Entities.Subscribe", "Subscribe")
-                        .WithMany()
-                        .HasForeignKey("SubscribeId");
-
-                    b.Navigation("Subscribe");
-                });
-
-            modelBuilder.Entity("API.Entities.Provider", b =>
-                {
-                    b.HasOne("API.Entities.AppUser", null)
-                        .WithOne()
-                        .HasForeignKey("API.Entities.Provider", "Id")
-                        .OnDelete(DeleteBehavior.ClientCascade)
-                        .IsRequired();
-
-                    b.HasOne("API.Entities.ProviderType", "ProviderType")
-                        .WithMany("Provider")
-                        .HasForeignKey("ProviderTypeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ProviderType");
-                });
-
             modelBuilder.Entity("API.Entities.AppRole", b =>
                 {
                     b.Navigation("UserRoles");
@@ -1269,79 +833,33 @@ namespace API.Migrations
                     b.Navigation("UserRoles");
                 });
 
-            modelBuilder.Entity("API.Entities.AppUserType", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.GameParticipant", b =>
                 {
-                    b.Navigation("Users");
+                    b.Navigation("Answers");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.BrandName", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.GameSession", b =>
                 {
-                    b.Navigation("Item");
+                    b.Navigation("Answers");
+
+                    b.Navigation("Participants");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.CarStatus", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.Question", b =>
                 {
-                    b.Navigation("Item");
+                    b.Navigation("Choices");
+
+                    b.Navigation("QuizQuestions");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.CarType", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.Quiz", b =>
                 {
-                    b.Navigation("Item");
+                    b.Navigation("QuizQuestions");
                 });
 
-            modelBuilder.Entity("API.Entities.Auctions.Color", b =>
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAttempt", b =>
                 {
-                    b.Navigation("Item");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.Item", b =>
-                {
-                    b.Navigation("itemPhotos");
-                });
-
-            modelBuilder.Entity("API.Entities.Auctions.Model", b =>
-                {
-                    b.Navigation("Item");
-                });
-
-            modelBuilder.Entity("API.Entities.ProviderType", b =>
-                {
-                    b.Navigation("Provider");
-                });
-
-            modelBuilder.Entity("API.Entities.VehicleType", b =>
-                {
-                    b.Navigation("Item");
-                });
-
-            modelBuilder.Entity("API.Entities.Admin", b =>
-                {
-                    b.Navigation("Auctions");
-                });
-
-            modelBuilder.Entity("API.Entities.Auction", b =>
-                {
-                    b.Navigation("AuctionRecords");
-
-                    b.Navigation("CarCommetions");
-
-                    b.Navigation("FavoriteAuctions");
-                });
-
-            modelBuilder.Entity("API.Entities.Client", b =>
-                {
-                    b.Navigation("AuctionRecords");
-
-                    b.Navigation("CarCommetions");
-
-                    b.Navigation("FavoriteAuctions");
-                });
-
-            modelBuilder.Entity("API.Entities.Provider", b =>
-                {
-                    b.Navigation("Auctions");
-
-                    b.Navigation("ProviderPhotos");
+                    b.Navigation("Answers");
                 });
 #pragma warning restore 612, 618
         }
