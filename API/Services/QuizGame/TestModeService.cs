@@ -3,6 +3,7 @@ using API.DTOs.QuizGame;
 using API.Entities.QuizGame;
 using API.Interfaces.QuizGame;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace API.Services.QuizGame;
 
@@ -228,6 +229,7 @@ public class TestModeService : ITestModeService
         var existingAnswer = await _context.Set<QuizAttemptAnswer>()
             .FirstOrDefaultAsync(x => x.QuizAttemptId == attemptId && x.QuestionId == dto.QuestionId && !x.IsDeleted);
 
+        var normalizedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
         var isCorrect = EvaluateAnswer(question, dto);
         var score = isCorrect ? (currentQuizQuestion.PointsOverride ?? question.Points) : 0;
 
@@ -237,7 +239,8 @@ public class TestModeService : ITestModeService
             {
                 QuizAttemptId = attemptId,
                 QuestionId = dto.QuestionId,
-                SelectedChoiceId = question.Type == QuestionType.ShortAnswer ? null : dto.SelectedChoiceId,
+                SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null,
+                SelectedChoiceIdsJson = SerializeSelectedChoiceIds(normalizedChoiceIds),
                 TextAnswer = question.Type == QuestionType.ShortAnswer ? dto.TextAnswer?.Trim() : null,
                 IsCorrect = isCorrect,
                 ScoreAwarded = score,
@@ -247,7 +250,8 @@ public class TestModeService : ITestModeService
         }
         else
         {
-            existingAnswer.SelectedChoiceId = question.Type == QuestionType.ShortAnswer ? null : dto.SelectedChoiceId;
+            existingAnswer.SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null;
+            existingAnswer.SelectedChoiceIdsJson = SerializeSelectedChoiceIds(normalizedChoiceIds);
             existingAnswer.TextAnswer = question.Type == QuestionType.ShortAnswer ? dto.TextAnswer?.Trim() : null;
             existingAnswer.IsCorrect = isCorrect;
             existingAnswer.ScoreAwarded = score;
@@ -277,8 +281,10 @@ public class TestModeService : ITestModeService
         {
             Accepted = true,
             IsCorrect = null,
-            SelectedChoiceId = question.Type == QuestionType.ShortAnswer ? null : dto.SelectedChoiceId,
+            SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null,
+            SelectedChoiceIds = normalizedChoiceIds,
             CorrectChoiceId = null,
+            CorrectChoiceIds = new List<int>(),
             NextQuestionIndex = nextIndex,
             AnsweredQuestions = answeredSet.Count,
             RemainingQuestions = Math.Max(0, orderedQuestions.Count - answeredSet.Count),
@@ -327,7 +333,7 @@ public class TestModeService : ITestModeService
             }
 
             var question = quizQuestion.Question;
-            if (!TryNormalizeFinishAnswer(question, submission, out var normalizedChoiceId, out var normalizedTextAnswer))
+            if (!TryNormalizeFinishAnswer(question, submission, out var normalizedChoiceIds, out var normalizedTextAnswer))
             {
                 continue;
             }
@@ -337,7 +343,8 @@ public class TestModeService : ITestModeService
             var normalizedSubmission = new SubmitTestAnswerDto
             {
                 QuestionId = submission.QuestionId,
-                SelectedChoiceId = normalizedChoiceId,
+                SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null,
+                SelectedChoiceIds = normalizedChoiceIds,
                 TextAnswer = normalizedTextAnswer
             };
 
@@ -350,7 +357,8 @@ public class TestModeService : ITestModeService
                 {
                     QuizAttemptId = attemptId,
                     QuestionId = submission.QuestionId,
-                    SelectedChoiceId = normalizedChoiceId,
+                    SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null,
+                    SelectedChoiceIdsJson = SerializeSelectedChoiceIds(normalizedChoiceIds),
                     TextAnswer = normalizedTextAnswer,
                     IsCorrect = isCorrect,
                     ScoreAwarded = score,
@@ -365,7 +373,8 @@ public class TestModeService : ITestModeService
             }
 
             answer.IsDeleted = false;
-            answer.SelectedChoiceId = normalizedChoiceId;
+            answer.SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null;
+            answer.SelectedChoiceIdsJson = SerializeSelectedChoiceIds(normalizedChoiceIds);
             answer.TextAnswer = normalizedTextAnswer;
             answer.IsCorrect = isCorrect;
             answer.ScoreAwarded = score;
@@ -532,9 +541,9 @@ public class TestModeService : ITestModeService
         }).ToList();
     }
 
-    private static bool TryNormalizeFinishAnswer(Question question, SubmitTestAnswerDto dto, out int? selectedChoiceId, out string? textAnswer)
+    private static bool TryNormalizeFinishAnswer(Question question, SubmitTestAnswerDto dto, out List<int> selectedChoiceIds, out string? textAnswer)
     {
-        selectedChoiceId = null;
+        selectedChoiceIds = new List<int>();
         textAnswer = null;
 
         if (question.Type == QuestionType.ShortAnswer)
@@ -549,19 +558,14 @@ public class TestModeService : ITestModeService
             return true;
         }
 
-        if (!dto.SelectedChoiceId.HasValue)
+        selectedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
+        if (selectedChoiceIds.Count == 0)
         {
             return false;
         }
 
-        var selectedChoice = question.Choices.FirstOrDefault(x => x.Id == dto.SelectedChoiceId.Value);
-        if (selectedChoice is null)
-        {
-            return false;
-        }
-
-        selectedChoiceId = selectedChoice.Id;
-        return true;
+        var validChoiceIds = question.Choices.Select(x => x.Id).ToHashSet();
+        return selectedChoiceIds.All(validChoiceIds.Contains);
     }
 
     private static string? ValidateSubmission(Question question, SubmitTestAnswerDto dto)
@@ -571,50 +575,71 @@ public class TestModeService : ITestModeService
             return string.IsNullOrWhiteSpace(dto.TextAnswer) ? "Please write your answer first." : null;
         }
 
-        if (!dto.SelectedChoiceId.HasValue)
+        var selectedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
+        if (selectedChoiceIds.Count == 0)
         {
-            return "Please select an answer first.";
+            return question.SelectionMode == QuestionSelectionMode.Multiple
+                ? "Please select at least one answer first."
+                : "Please select an answer first.";
         }
 
-        var isValidChoice = question.Choices.Any(x => x.Id == dto.SelectedChoiceId.Value);
-        return isValidChoice ? null : "Selected answer is invalid for this question.";
+        var validChoiceIds = question.Choices.Select(x => x.Id).ToHashSet();
+        return selectedChoiceIds.All(validChoiceIds.Contains)
+            ? null
+            : "Selected answer is invalid for this question.";
     }
 
     private static TestModeQuestionDto MapTestQuestion(bool isAttemptFinished, QuizQuestion quizQuestion, QuizAttemptAnswer? answer, int questionIndex, int totalQuestions)
     {
         var question = quizQuestion.Question;
-        var correctChoiceId = !isAttemptFinished || question.Type == QuestionType.ShortAnswer
-            ? null
-            : question.Choices.OrderBy(x => x.Order).FirstOrDefault(x => x.IsCorrect)?.Id;
+        var selectedChoiceIds = DeserializeSelectedChoiceIds(answer?.SelectedChoiceIdsJson, answer?.SelectedChoiceId);
+        var correctChoiceIds = !isAttemptFinished || question.Type == QuestionType.ShortAnswer
+            ? new List<int>()
+            : question.Choices
+                .Where(x => x.IsCorrect)
+                .OrderBy(x => x.Order)
+                .Select(x => x.Id)
+                .ToList();
 
         return new TestModeQuestionDto
         {
             QuestionIndex = questionIndex,
             TotalQuestions = totalQuestions,
             IsAnswered = answer is not null,
-            SelectedChoiceId = answer?.SelectedChoiceId,
+            SelectedChoiceId = selectedChoiceIds.Count == 1 ? selectedChoiceIds[0] : answer?.SelectedChoiceId,
+            SelectedChoiceIds = selectedChoiceIds,
             TextAnswer = answer?.TextAnswer,
             IsCorrect = isAttemptFinished ? answer?.IsCorrect : null,
-            CorrectChoiceId = correctChoiceId,
+            CorrectChoiceId = correctChoiceIds.Count == 1 ? correctChoiceIds[0] : null,
+            CorrectChoiceIds = correctChoiceIds,
             Question = new QuestionResponseDto
             {
                 Id = question.Id,
                 Title = question.Title,
                 Text = question.Text,
                 Type = question.Type,
+                SelectionMode = question.SelectionMode,
                 Difficulty = question.Difficulty,
+                ImageUrl = GetQuestionImageUrl(question.Id),
+                Explanation = question.Explanation,
                 Points = quizQuestion.PointsOverride ?? question.Points,
                 AnswerSeconds = quizQuestion.AnswerSeconds > 0 ? quizQuestion.AnswerSeconds : question.AnswerSeconds,
                 CreatedBy = question.CreatedBy,
                 CreatedAt = question.CreatedAt,
                 Choices = question.Type == QuestionType.ShortAnswer
                     ? new List<QuestionChoiceDto>()
-                    : question.Choices.OrderBy(c => c.Order).Select(c => new QuestionChoiceDto
+                    : question.Choices.OrderBy(c => c.Order).Select(c =>
                     {
-                        Id = c.Id,
-                        ChoiceText = c.ChoiceText,
-                        IsCorrect = false,
-                        Order = c.Order
+                        var choiceImageUrl = GetChoiceImageUrl(c.Id);
+                        return new QuestionChoiceDto
+                        {
+                            Id = c.Id,
+                            ChoiceText = c.ChoiceText,
+                            ImageUrl = choiceImageUrl,
+                            HasImage = !string.IsNullOrWhiteSpace(choiceImageUrl),
+                            IsCorrect = false,
+                            Order = c.Order
+                        };
                     }).ToList()
             }
         };
@@ -705,10 +730,13 @@ public class TestModeService : ITestModeService
     {
         var question = quizQuestion.Question;
         var orderedChoices = question.Choices.OrderBy(x => x.Order).ToList();
+        var selectedChoiceIds = DeserializeSelectedChoiceIds(answer?.SelectedChoiceIdsJson, answer?.SelectedChoiceId);
         var selectedAnswerText = question.Type == QuestionType.ShortAnswer
             ? answer?.TextAnswer?.Trim()
-            : orderedChoices.FirstOrDefault(x => x.Id == answer?.SelectedChoiceId)?.ChoiceText;
-        var correctAnswerText = orderedChoices.FirstOrDefault(x => x.IsCorrect)?.ChoiceText ?? string.Empty;
+            : string.Join(", ", orderedChoices
+                .Where(x => selectedChoiceIds.Contains(x.Id))
+                .Select(GetChoiceReviewLabel));
+        var correctAnswerText = string.Join(", ", orderedChoices.Where(x => x.IsCorrect).Select(GetChoiceReviewLabel));
 
         return new TestResultReviewItemDto
         {
@@ -719,7 +747,8 @@ public class TestModeService : ITestModeService
             IsAnswered = answer is not null,
             IsCorrect = answer?.IsCorrect == true,
             SelectedAnswerText = string.IsNullOrWhiteSpace(selectedAnswerText) ? null : selectedAnswerText,
-            CorrectAnswerText = correctAnswerText
+            CorrectAnswerText = correctAnswerText,
+            Explanation = question.Explanation
         };
     }
 
@@ -733,12 +762,24 @@ public class TestModeService : ITestModeService
                 && string.Equals(expected.Trim(), dto.TextAnswer.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
-        if (!dto.SelectedChoiceId.HasValue)
+        var selectedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
+        if (selectedChoiceIds.Count == 0)
         {
             return false;
         }
 
-        var choice = question.Choices.FirstOrDefault(x => x.Id == dto.SelectedChoiceId.Value);
+        if (question.SelectionMode == QuestionSelectionMode.Multiple && question.Type == QuestionType.MultipleChoice)
+        {
+            var correctChoiceIds = question.Choices
+                .Where(x => x.IsCorrect)
+                .Select(x => x.Id)
+                .OrderBy(x => x)
+                .ToList();
+
+            return correctChoiceIds.SequenceEqual(selectedChoiceIds.OrderBy(x => x));
+        }
+
+        var choice = question.Choices.FirstOrDefault(x => x.Id == selectedChoiceIds[0]);
         return choice?.IsCorrect == true;
     }
 
@@ -749,12 +790,123 @@ public class TestModeService : ITestModeService
             Accepted = false,
             IsCorrect = null,
             SelectedChoiceId = null,
+            SelectedChoiceIds = new List<int>(),
             CorrectChoiceId = null,
+            CorrectChoiceIds = new List<int>(),
             NextQuestionIndex = null,
             AnsweredQuestions = 0,
             RemainingQuestions = 0,
             Message = message
         };
+    }
+
+    private static List<int> NormalizeSelectedChoiceIds(Question question, int? selectedChoiceId, List<int>? selectedChoiceIds)
+    {
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            return new List<int>();
+        }
+
+        var values = (selectedChoiceIds ?? new List<int>())
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+        if (selectedChoiceId.HasValue && selectedChoiceId.Value > 0 && !values.Contains(selectedChoiceId.Value))
+        {
+            values.Insert(0, selectedChoiceId.Value);
+        }
+
+        if (question.SelectionMode != QuestionSelectionMode.Multiple || question.Type != QuestionType.MultipleChoice)
+        {
+            var single = values.FirstOrDefault();
+            return single > 0 ? new List<int> { single } : new List<int>();
+        }
+
+        return values;
+    }
+
+    private static string? SerializeSelectedChoiceIds(List<int> selectedChoiceIds)
+    {
+        return selectedChoiceIds.Count == 0 ? null : JsonSerializer.Serialize(selectedChoiceIds);
+    }
+
+    private static List<int> DeserializeSelectedChoiceIds(string? selectedChoiceIdsJson, int? selectedChoiceId)
+    {
+        if (!string.IsNullOrWhiteSpace(selectedChoiceIdsJson))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<int>>(selectedChoiceIdsJson);
+                if (parsed is { Count: > 0 })
+                {
+                    return parsed.Where(x => x > 0).Distinct().OrderBy(x => x).ToList();
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return selectedChoiceId.HasValue && selectedChoiceId.Value > 0
+            ? new List<int> { selectedChoiceId.Value }
+            : new List<int>();
+    }
+
+    private static string GetQuestionImageUrl(int questionId)
+    {
+        var uploadsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "questions");
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"question-{questionId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/questions/{fileName}";
+        var version = new DateTimeOffset(File.GetLastWriteTimeUtc(filePath)).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private static string GetChoiceImageUrl(int choiceId)
+    {
+        var uploadsDirectory = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "question-choices");
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"choice-{choiceId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/question-choices/{fileName}";
+        var version = new DateTimeOffset(File.GetLastWriteTimeUtc(filePath)).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private static string GetChoiceReviewLabel(QuestionChoice choice)
+    {
+        if (!string.IsNullOrWhiteSpace(choice.ChoiceText))
+        {
+            return choice.ChoiceText;
+        }
+
+        return $"Option {choice.Order}";
     }
 }
 

@@ -7,6 +7,12 @@ public enum QuestionType
     ShortAnswer = 3
 }
 
+public enum QuestionSelectionMode
+{
+    Single = 1,
+    Multiple = 2
+}
+
 public enum QuizMode
 {
     Test = 1,
@@ -26,6 +32,12 @@ public enum SessionQuestionFlowMode
 {
     HostControlled = 1,
     TimedByQuestion = 2
+}
+
+public enum SessionAccessType
+{
+    Public = 1,
+    Private = 2
 }
 
 public enum ParticipantJoinStatus

@@ -6,6 +6,10 @@ public class CreateGameSessionDto
 {
     public int QuizId { get; set; }
     public SessionQuestionFlowMode QuestionFlowMode { get; set; } = SessionQuestionFlowMode.HostControlled;
+    public SessionAccessType AccessType { get; set; } = SessionAccessType.Private;
+    public DateTime? ScheduledStartAt { get; set; }
+    public DateTime? ScheduledEndAt { get; set; }
+    public int? DurationMinutes { get; set; }
 }
 
 public class GameSessionResponseDto
@@ -18,12 +22,17 @@ public class GameSessionResponseDto
     public string JoinCode { get; set; } = string.Empty;
     public string JoinLink { get; set; } = string.Empty;
     public GameSessionStatus Status { get; set; }
+    public SessionAccessType AccessType { get; set; }
     public SessionQuestionFlowMode QuestionFlowMode { get; set; }
+    public DateTime? ScheduledStartAt { get; set; }
+    public DateTime? ScheduledEndAt { get; set; }
+    public int? DurationMinutes { get; set; }
     public int CurrentQuestionIndex { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public int ParticipantsCount { get; set; }
+    public List<QuizCategoryDto> Categories { get; set; } = new();
 }
 
 public class SessionStateDto
@@ -33,7 +42,11 @@ public class SessionStateDto
     public string QuizTitle { get; set; } = string.Empty;
     public string? QuizCoverImageUrl { get; set; }
     public GameSessionStatus Status { get; set; }
+    public SessionAccessType AccessType { get; set; }
     public SessionQuestionFlowMode QuestionFlowMode { get; set; }
+    public DateTime? ScheduledStartAt { get; set; }
+    public DateTime? ScheduledEndAt { get; set; }
+    public int? DurationMinutes { get; set; }
     public int CurrentQuestionIndex { get; set; }
     public QuestionResponseDto? CurrentQuestion { get; set; }
     public QuestionResponseDto? NextQuestion { get; set; }

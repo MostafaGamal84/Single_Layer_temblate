@@ -9,7 +9,11 @@ public class GameSession : BaseEntity
     public string JoinCode { get; set; } = string.Empty;
     public string JoinLink { get; set; } = string.Empty;
     public GameSessionStatus Status { get; set; } = GameSessionStatus.Draft;
+    public SessionAccessType AccessType { get; set; } = SessionAccessType.Private;
     public SessionQuestionFlowMode QuestionFlowMode { get; set; } = SessionQuestionFlowMode.HostControlled;
+    public DateTime? ScheduledStartAt { get; set; }
+    public DateTime? ScheduledEndAt { get; set; }
+    public int? DurationMinutes { get; set; }
     public int CurrentQuestionIndex { get; set; }
     public DateTime? CurrentQuestionStartedAt { get; set; }
     public DateTime? CurrentQuestionEndsAt { get; set; }
@@ -49,6 +53,7 @@ public class PlayerAnswer : BaseEntity
     public int ParticipantId { get; set; }
     public int QuestionId { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public string? SelectedChoiceIdsJson { get; set; }
     public string? TextAnswer { get; set; }
     public bool IsCorrect { get; set; }
     public int ScoreAwarded { get; set; }

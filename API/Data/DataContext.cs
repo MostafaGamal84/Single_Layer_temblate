@@ -16,8 +16,10 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
 
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<QuestionChoice> QuestionChoices => Set<QuestionChoice>();
+    public DbSet<Category> Categories => Set<Category>();
     public DbSet<Quiz> Quizzes => Set<Quiz>();
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
+    public DbSet<QuizCategory> QuizCategories => Set<QuizCategory>();
     public DbSet<GameSession> GameSessions => Set<GameSession>();
     public DbSet<GameParticipant> GameParticipants => Set<GameParticipant>();
     public DbSet<PlayerAnswer> PlayerAnswers => Set<PlayerAnswer>();
@@ -50,6 +52,18 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
             .HasMany(x => x.QuizQuestions)
             .WithOne(x => x.Quiz)
             .HasForeignKey(x => x.QuizId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Quiz>()
+            .HasMany(x => x.QuizCategories)
+            .WithOne(x => x.Quiz)
+            .HasForeignKey(x => x.QuizId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<Category>()
+            .HasMany(x => x.QuizCategories)
+            .WithOne(x => x.Category)
+            .HasForeignKey(x => x.CategoryId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<Question>()
@@ -124,6 +138,14 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
 
         builder.Entity<GameParticipant>()
             .HasIndex(x => new { x.GameSessionId, x.DisplayName })
+            .IsUnique();
+
+        builder.Entity<Category>()
+            .HasIndex(x => x.NormalizedName)
+            .IsUnique();
+
+        builder.Entity<QuizCategory>()
+            .HasIndex(x => new { x.QuizId, x.CategoryId })
             .IsUnique();
     }
 }

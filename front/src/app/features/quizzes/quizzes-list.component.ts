@@ -11,31 +11,30 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
   template: `
     <div class="card list-shell">
       <div class="list-head">
-        <h2>Quizzes</h2>
-        <a routerLink="/quizzes/new"><button type="button">New Quiz</button></a>
+        <div>
+          <p class="eyebrow">Test Library</p>
+          <h2>Tests</h2>
+        </div>
+        <a routerLink="/quizzes/new"><button type="button">New Test</button></a>
       </div>
 
-      <div class="list-filters filters-wide">
-        <div class="col filter-field">
-          <label for="quizzes-search">Search</label>
-          <input id="quizzes-search" name="quizzesSearch" [(ngModel)]="search" placeholder="Search" (keyup.enter)="load()" />
+      <div class="filters-grid">
+        <div class="field">
+          <label for="tests-search">Search</label>
+          <input id="tests-search" name="testsSearch" [(ngModel)]="search" placeholder="Search title or description" (keyup.enter)="load()" />
         </div>
 
-        <div class="col filter-field">
-          <label for="quizzes-mode">Mode</label>
-          <select id="quizzes-mode" name="quizzesMode" [(ngModel)]="mode" (change)="load()">
-            <option [ngValue]="null">All Modes</option>
-            <option [ngValue]="1">Test</option>
-            <option [ngValue]="2">Game</option>
-          </select>
+        <div class="field">
+          <label for="tests-category">Category</label>
+          <input id="tests-category" name="testsCategory" [(ngModel)]="category" placeholder="Unit 1" (keyup.enter)="load()" />
         </div>
 
-        <div class="col filter-field">
-          <label for="quizzes-published">Status</label>
-          <select id="quizzes-published" name="quizzesPublished" [(ngModel)]="published" (change)="load()">
+        <div class="field">
+          <label for="tests-status">Status</label>
+          <select id="tests-status" name="testsStatus" [(ngModel)]="published" (change)="load()">
             <option [ngValue]="null">All</option>
             <option [ngValue]="true">Published</option>
-            <option [ngValue]="false">Unpublished</option>
+            <option [ngValue]="false">Draft</option>
           </select>
         </div>
 
@@ -47,19 +46,25 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       <div class="table-wrap desktop-table">
         <table>
           <thead>
-            <tr><th>Title</th><th>Mode</th><th>Questions</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Test</th><th>Categories</th><th>Questions</th><th>Marks</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             @for (quiz of items; track quiz.id) {
               <tr>
-                <td>{{ displayTitle(quiz) }}</td>
-                <td>{{ modeLabel(quiz.mode) }}</td>
-                <td>{{ questionsCount(quiz) }}</td>
-                <td>{{ isPublished(quiz) ? 'Published' : 'Draft' }}</td>
-                <td class="row table-actions">
-                  <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Details</button></a>
+                <td>
+                  <strong>{{ quiz.title }}</strong>
+                  @if (quiz.description) {
+                    <div class="cell-copy">{{ quiz.description }}</div>
+                  }
+                </td>
+                <td>{{ categoryLabel(quiz) }}</td>
+                <td>{{ quiz.questionsCount }}</td>
+                <td>{{ marksLabel(quiz) }}</td>
+                <td>{{ quiz.isPublished ? 'Published' : 'Draft' }}</td>
+                <td class="table-actions">
+                  <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Builder</button></a>
                   <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
-                  <button type="button" (click)="togglePublish(quiz)">{{ isPublished(quiz) ? 'Unpublish' : 'Publish' }}</button>
+                  <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
                   <button type="button" class="danger" (click)="remove(quiz.id)">Delete</button>
                 </td>
               </tr>
@@ -71,26 +76,34 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       <div class="mobile-list">
         @for (quiz of items; track quiz.id) {
           <article class="mobile-item">
-            <div class="mobile-item-head">
-              <strong>{{ displayTitle(quiz) }}</strong>
-              <span class="mobile-pill">{{ isPublished(quiz) ? 'Published' : 'Draft' }}</span>
+            <div class="mobile-head">
+              <strong>{{ quiz.title }}</strong>
+              <span class="mobile-pill">{{ quiz.isPublished ? 'Published' : 'Draft' }}</span>
             </div>
+
+            @if (quiz.description) {
+              <p class="mobile-copy">{{ quiz.description }}</p>
+            }
 
             <div class="mobile-metrics">
               <div class="mobile-metric">
-                <span>Mode</span>
-                <strong>{{ modeLabel(quiz.mode) }}</strong>
+                <span>Categories</span>
+                <strong>{{ categoryLabel(quiz) }}</strong>
               </div>
               <div class="mobile-metric">
                 <span>Questions</span>
-                <strong>{{ questionsCount(quiz) }}</strong>
+                <strong>{{ quiz.questionsCount }}</strong>
+              </div>
+              <div class="mobile-metric">
+                <span>Marks</span>
+                <strong>{{ marksLabel(quiz) }}</strong>
               </div>
             </div>
 
-            <div class="mobile-actions mobile-actions-wide">
-              <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Details</button></a>
+            <div class="mobile-actions">
+              <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Builder</button></a>
               <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
-              <button type="button" (click)="togglePublish(quiz)">{{ isPublished(quiz) ? 'Unpublish' : 'Publish' }}</button>
+              <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
               <button type="button" class="danger" (click)="remove(quiz.id)">Delete</button>
             </div>
           </article>
@@ -99,16 +112,9 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
     </div>
   `,
   styles: [`
-    :host {
-      display: block;
-      min-width: 0;
-      max-width: 100%;
-    }
-
     .list-shell {
       display: grid;
       gap: 14px;
-      min-width: 0;
     }
 
     .list-head {
@@ -129,18 +135,16 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       text-decoration: none;
     }
 
-    .list-filters {
+    .filters-grid {
       display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(160px, 220px) auto;
       gap: 10px;
       align-items: end;
-      min-width: 0;
     }
 
-    .filters-wide {
-      grid-template-columns: minmax(0, 1fr) minmax(150px, 180px) minmax(150px, 180px) auto;
-    }
-
-    .filter-field {
+    .field {
+      display: grid;
+      gap: 6px;
       min-width: 0;
     }
 
@@ -148,13 +152,21 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       min-height: 42px;
     }
 
-    .desktop-table {
-      display: block;
+    .cell-copy,
+    .mobile-copy {
+      margin-top: 6px;
+      color: var(--muted-strong);
+      line-height: 1.45;
     }
 
     .table-actions {
+      display: flex;
+      flex-wrap: wrap;
       gap: 8px;
-      align-items: center;
+    }
+
+    .desktop-table {
+      display: block;
     }
 
     .mobile-list {
@@ -171,21 +183,14 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       background: var(--surface-soft);
     }
 
-    .mobile-item-head {
+    .mobile-head {
       display: flex;
       justify-content: space-between;
       gap: 10px;
       align-items: flex-start;
     }
 
-    .mobile-item-head strong {
-      min-width: 0;
-      color: var(--text);
-      line-height: 1.4;
-    }
-
     .mobile-pill {
-      flex-shrink: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -200,7 +205,7 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
 
     .mobile-metrics {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;
     }
 
@@ -222,18 +227,10 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       text-transform: uppercase;
     }
 
-    .mobile-metric strong {
-      color: var(--text);
-      line-height: 1.4;
-    }
-
     .mobile-actions {
       display: grid;
-      gap: 8px;
-    }
-
-    .mobile-actions-wide {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
     .mobile-actions a,
@@ -241,18 +238,14 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       width: 100%;
     }
 
-    @media (max-width: 820px) {
-      .filters-wide {
+    @media (max-width: 900px) {
+      .filters-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
 
     @media (max-width: 760px) {
-      .list-shell {
-        gap: 12px;
-      }
-
-      .filters-wide {
+      .filters-grid {
         grid-template-columns: 1fr;
       }
 
@@ -266,11 +259,7 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
     }
 
     @media (max-width: 520px) {
-      .mobile-item {
-        padding: 12px;
-      }
-
-      .mobile-item-head {
+      .mobile-head {
         flex-direction: column;
         align-items: stretch;
       }
@@ -280,7 +269,7 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       }
 
       .mobile-metrics,
-      .mobile-actions-wide {
+      .mobile-actions {
         grid-template-columns: 1fr;
       }
     }
@@ -289,32 +278,35 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
 export class QuizzesListComponent implements OnInit {
   items: any[] = [];
   search = '';
-  mode: number | null = null;
+  category = '';
   published: boolean | null = null;
   error = '';
 
   constructor(private service: QuizService, private confirmDialog: ConfirmDialogService) {}
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void {
+    this.load();
+  }
 
   load(): void {
-    this.service.getAll({ search: this.search, mode: this.mode, isPublished: this.published }).subscribe({
+    this.error = '';
+    this.service.getAll({ search: this.search, category: this.category, isPublished: this.published, mode: 1 }).subscribe({
       next: (res: any) => this.items = res.items || [],
-      error: (err) => this.error = err?.error?.message || 'Failed to load quizzes'
+      error: (err) => this.error = err?.error?.message || 'Failed to load tests'
     });
   }
 
   togglePublish(quiz: any): void {
-    this.service.publish(quiz.id, !this.isPublished(quiz)).subscribe({
+    this.service.publish(quiz.id, !quiz.isPublished).subscribe({
       next: () => this.load(),
-      error: (err) => this.error = err?.error?.message || 'Publish update failed'
+      error: (err) => this.error = err?.error?.message || 'Status update failed'
     });
   }
 
   async remove(id: number): Promise<void> {
     const ok = await this.confirmDialog.open({
-      title: 'Delete quiz?',
-      message: 'This quiz will be removed permanently from the system.',
+      title: 'Delete test?',
+      message: 'This test and its builder configuration will be removed from the system.',
       confirmText: 'Delete',
       cancelText: 'Keep it',
       tone: 'danger'
@@ -328,20 +320,18 @@ export class QuizzesListComponent implements OnInit {
     });
   }
 
-  displayTitle(item: any): string {
-    return item?.title ?? item?.quizTitle ?? `#${item?.id ?? ''}`;
+  categoryLabel(item: any): string {
+    const categories = Array.isArray(item?.categories) ? item.categories.map((category: any) => category?.name).filter(Boolean) : [];
+    return categories.length ? categories.join(', ') : 'Uncategorized';
   }
 
-  modeLabel(mode: any): string {
-    if (mode === 'Test' || mode === 'Game') return mode;
-    return Number(mode) === 1 ? 'Test' : 'Game';
-  }
+  marksLabel(item: any): string {
+    const totalMarks = Number(item?.totalMarks ?? 0);
+    const effectiveMarks = Number(item?.effectiveTotalMarks ?? 0);
+    if (totalMarks > 0) {
+      return `${totalMarks} total`;
+    }
 
-  questionsCount(item: any): number {
-    return Number(item?.questionsCount ?? item?.questions?.length ?? 0);
-  }
-
-  isPublished(item: any): boolean {
-    return Boolean(item?.isPublished ?? item?.published ?? false);
+    return effectiveMarks > 0 ? `${effectiveMarks} auto` : '-';
   }
 }

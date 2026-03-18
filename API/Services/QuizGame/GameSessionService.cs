@@ -28,10 +28,32 @@ public class GameSessionService : IGameSessionService
 
     public async Task<GameSessionResponseDto> CreateAsync(CreateGameSessionDto dto, int? hostId, string baseUrl)
     {
-        var quiz = await _context.Set<Quiz>().FirstOrDefaultAsync(x => x.Id == dto.QuizId && !x.IsDeleted);
+        var quiz = await _context.Set<Quiz>()
+            .Include(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
+            .FirstOrDefaultAsync(x => x.Id == dto.QuizId && !x.IsDeleted);
         if (quiz is null)
         {
             throw new ArgumentException("Quiz not found.");
+        }
+
+        var scheduledStartAt = ToUtc(dto.ScheduledStartAt);
+        var scheduledEndAt = ToUtc(dto.ScheduledEndAt);
+        var durationMinutes = NormalizeDurationMinutes(dto.DurationMinutes ?? (quiz.DurationMinutes > 0 ? quiz.DurationMinutes : null));
+
+        if (scheduledStartAt.HasValue && durationMinutes.HasValue && !scheduledEndAt.HasValue)
+        {
+            scheduledEndAt = scheduledStartAt.Value.AddMinutes(durationMinutes.Value);
+        }
+
+        if (scheduledStartAt.HasValue && scheduledEndAt.HasValue && scheduledEndAt <= scheduledStartAt)
+        {
+            throw new ArgumentException("Session end time must be after start time.");
+        }
+
+        if (!durationMinutes.HasValue && scheduledStartAt.HasValue && scheduledEndAt.HasValue)
+        {
+            durationMinutes = Math.Max(1, (int)Math.Ceiling((scheduledEndAt.Value - scheduledStartAt.Value).TotalMinutes));
         }
 
         var joinCode = await GenerateUniqueJoinCodeAsync();
@@ -41,8 +63,12 @@ public class GameSessionService : IGameSessionService
             HostId = hostId,
             JoinCode = joinCode,
             JoinLink = $"{baseUrl.TrimEnd('/')}/player/join/{joinCode}",
-            Status = GameSessionStatus.Waiting,
+            Status = scheduledStartAt.HasValue ? GameSessionStatus.Draft : GameSessionStatus.Waiting,
+            AccessType = NormalizeAccessType(dto.AccessType),
             QuestionFlowMode = NormalizeFlowMode(dto.QuestionFlowMode),
+            ScheduledStartAt = scheduledStartAt,
+            ScheduledEndAt = scheduledEndAt,
+            DurationMinutes = durationMinutes,
             CreatedAt = DateTime.UtcNow,
             CurrentQuestionIndex = 0,
             IsDeleted = false
@@ -60,6 +86,8 @@ public class GameSessionService : IGameSessionService
         var sessions = await _context.Set<GameSession>()
             .AsNoTracking()
             .Include(x => x.Quiz)
+            .ThenInclude(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
             .Include(x => x.Participants)
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedAt)
@@ -79,6 +107,8 @@ public class GameSessionService : IGameSessionService
         var session = await _context.Set<GameSession>()
             .AsNoTracking()
             .Include(x => x.Quiz)
+            .ThenInclude(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
             .Include(x => x.Participants)
             .FirstOrDefaultAsync(x => x.JoinCode == joinCode && !x.IsDeleted);
 
@@ -258,7 +288,11 @@ public class GameSessionService : IGameSessionService
             QuizTitle = session.Quiz.Title,
             QuizCoverImageUrl = GetCoverImageUrl(session.QuizId),
             Status = session.Status,
+            AccessType = session.AccessType,
             QuestionFlowMode = session.QuestionFlowMode,
+            ScheduledStartAt = ToUtc(session.ScheduledStartAt),
+            ScheduledEndAt = ToUtc(session.ScheduledEndAt),
+            DurationMinutes = session.DurationMinutes,
             CurrentQuestionIndex = session.CurrentQuestionIndex,
             CurrentQuestion = currentQuestion,
             NextQuestion = nextQuestion,
@@ -401,6 +435,9 @@ public class GameSessionService : IGameSessionService
     public async Task AutoAdvanceTimedSessionsAsync(DateTime? nowUtc = null)
     {
         var now = nowUtc ?? DateTime.UtcNow;
+        await AutoEndExpiredSessionsAsync(now);
+        await AutoStartScheduledSessionsAsync(now);
+
         var expiredSessionIds = await _context.Set<GameSession>()
             .AsNoTracking()
             .Where(x =>
@@ -508,7 +545,10 @@ public class GameSessionService : IGameSessionService
             Title = qq.Question.Title,
             Text = qq.Question.Text,
             Type = qq.Question.Type,
+            SelectionMode = qq.Question.SelectionMode,
             Difficulty = qq.Question.Difficulty,
+            ImageUrl = GetQuestionImageUrl(qq.Question.Id),
+            Explanation = qq.Question.Explanation,
             Points = qq.PointsOverride ?? qq.Question.Points,
             AnswerSeconds = qq.AnswerSeconds,
             CreatedBy = qq.Question.CreatedBy,
@@ -517,12 +557,18 @@ public class GameSessionService : IGameSessionService
                 ? new List<QuestionChoiceDto>()
                 : qq.Question.Choices
                     .OrderBy(c => c.Order)
-                    .Select(c => new QuestionChoiceDto
+                    .Select(c =>
                     {
-                        Id = c.Id,
-                        ChoiceText = c.ChoiceText,
-                        IsCorrect = false,
-                        Order = c.Order
+                        var choiceImageUrl = GetChoiceImageUrl(c.Id);
+                        return new QuestionChoiceDto
+                        {
+                            Id = c.Id,
+                            ChoiceText = c.ChoiceText,
+                            ImageUrl = choiceImageUrl,
+                            HasImage = !string.IsNullOrWhiteSpace(choiceImageUrl),
+                            IsCorrect = false,
+                            Order = c.Order
+                        };
                     }).ToList()
         };
     }
@@ -575,6 +621,8 @@ public class GameSessionService : IGameSessionService
     {
         return await _context.Set<GameSession>()
             .Include(x => x.Quiz)
+            .ThenInclude(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
             .Include(x => x.Participants)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
     }
@@ -629,10 +677,97 @@ public class GameSessionService : IGameSessionService
             : SessionQuestionFlowMode.HostControlled;
     }
 
+    private static SessionAccessType NormalizeAccessType(SessionAccessType accessType)
+    {
+        return accessType == SessionAccessType.Public
+            ? SessionAccessType.Public
+            : SessionAccessType.Private;
+    }
+
+    private static int? NormalizeDurationMinutes(int? value)
+    {
+        if (!value.HasValue || value.Value <= 0)
+        {
+            return null;
+        }
+
+        if (value.Value > 1440)
+        {
+            return 1440;
+        }
+
+        return value.Value;
+    }
+
     private static DateTime? ToUtc(DateTime? value)
     {
         if (!value.HasValue) return null;
         return DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+    }
+
+    private async Task AutoStartScheduledSessionsAsync(DateTime now)
+    {
+        var scheduledSessionIds = await _context.Set<GameSession>()
+            .AsNoTracking()
+            .Where(x =>
+                !x.IsDeleted &&
+                x.Status == GameSessionStatus.Draft &&
+                x.ScheduledStartAt.HasValue &&
+                x.ScheduledStartAt <= now)
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        foreach (var sessionId in scheduledSessionIds)
+        {
+            var session = await LoadSession(sessionId);
+            if (session is null || session.IsDeleted || session.Status != GameSessionStatus.Draft)
+            {
+                continue;
+            }
+
+            session.Status = GameSessionStatus.Live;
+            session.StartedAt = now;
+            session.EndedAt = null;
+            await ConfigureTimerForCurrentQuestionAsync(session, now);
+            await _context.SaveChangesAsync();
+
+            var state = await GetStateAsync(sessionId);
+            await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("sessionStarted", state);
+            await BroadcastSessionUpdatedAsync(sessionId);
+        }
+    }
+
+    private async Task AutoEndExpiredSessionsAsync(DateTime now)
+    {
+        var expiredSessionIds = await _context.Set<GameSession>()
+            .AsNoTracking()
+            .Where(x =>
+                !x.IsDeleted &&
+                x.Status != GameSessionStatus.Ended &&
+                x.ScheduledEndAt.HasValue &&
+                x.ScheduledEndAt <= now)
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        foreach (var sessionId in expiredSessionIds)
+        {
+            var session = await LoadSession(sessionId);
+            if (session is null || session.IsDeleted || session.Status == GameSessionStatus.Ended)
+            {
+                continue;
+            }
+
+            session.Status = GameSessionStatus.Ended;
+            session.EndedAt = now;
+            ClearQuestionTimer(session);
+
+            await RecalculateRanksAsync(sessionId);
+            await _context.SaveChangesAsync();
+
+            var state = await GetStateAsync(sessionId);
+            await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("sessionEnded", state);
+            await BroadcastSessionUpdatedAsync(sessionId);
+        }
     }
 
     private GameSessionResponseDto MapSession(GameSession session)
@@ -647,12 +782,25 @@ public class GameSessionService : IGameSessionService
             JoinCode = session.JoinCode,
             JoinLink = session.JoinLink,
             Status = session.Status,
+            AccessType = session.AccessType,
             QuestionFlowMode = session.QuestionFlowMode,
+            ScheduledStartAt = ToUtc(session.ScheduledStartAt),
+            ScheduledEndAt = ToUtc(session.ScheduledEndAt),
+            DurationMinutes = session.DurationMinutes,
             CurrentQuestionIndex = session.CurrentQuestionIndex,
             StartedAt = session.StartedAt,
             EndedAt = session.EndedAt,
             CreatedAt = session.CreatedAt,
-            ParticipantsCount = session.Participants.Count(IsApprovedParticipant)
+            ParticipantsCount = session.Participants.Count(IsApprovedParticipant),
+            Categories = session.Quiz.QuizCategories
+                .Where(x => !x.IsDeleted && !x.Category.IsDeleted)
+                .OrderBy(x => x.Category.Name)
+                .Select(x => new QuizCategoryDto
+                {
+                    Id = x.CategoryId,
+                    Name = x.Category.Name
+                })
+                .ToList()
         };
     }
 
@@ -694,7 +842,7 @@ public class GameSessionService : IGameSessionService
 
     private string GetCoverImageUrl(int quizId)
     {
-        var uploadsDirectory = GetQuizCoverDirectoryPath();
+        var uploadsDirectory = GetUploadsDirectoryPath("quizzes");
         if (!Directory.Exists(uploadsDirectory))
         {
             return string.Empty;
@@ -715,7 +863,53 @@ public class GameSessionService : IGameSessionService
         return $"{relativePath}?v={version}";
     }
 
-    private string GetQuizCoverDirectoryPath()
+    private string GetQuestionImageUrl(int questionId)
+    {
+        var uploadsDirectory = GetUploadsDirectoryPath("questions");
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"question-{questionId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault(path => AllowedCoverExtensions.Contains(Path.GetExtension(path)));
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/questions/{fileName}";
+        var version = new DateTimeOffset(File.GetLastWriteTimeUtc(filePath)).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private string GetChoiceImageUrl(int choiceId)
+    {
+        var uploadsDirectory = GetUploadsDirectoryPath("question-choices");
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"choice-{choiceId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault(path => AllowedCoverExtensions.Contains(Path.GetExtension(path)));
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/question-choices/{fileName}";
+        var version = new DateTimeOffset(File.GetLastWriteTimeUtc(filePath)).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private string GetUploadsDirectoryPath(string folderName)
     {
         var webRoot = _environment.WebRootPath;
         if (string.IsNullOrWhiteSpace(webRoot))
@@ -723,6 +917,6 @@ public class GameSessionService : IGameSessionService
             webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         }
 
-        return Path.Combine(webRoot, "uploads", "quizzes");
+        return Path.Combine(webRoot, "uploads", folderName);
     }
 }

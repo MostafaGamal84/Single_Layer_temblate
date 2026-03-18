@@ -2,6 +2,7 @@ using API.DTOs.QuizGame;
 using API.Extensions;
 using API.Interfaces.QuizGame;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers.QuizGame;
@@ -53,6 +54,50 @@ public class QuestionsController : ControllerBase
     {
         var deleted = await _service.SoftDeleteAsync(id);
         return deleted ? Ok(new { message = "Question deleted" }) : NotFound(new { message = "Question not found" });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("{id:int}/image")]
+    public async Task<IActionResult> UploadImage(int id, [FromForm] IFormFile? file)
+    {
+        if (file is null)
+        {
+            return BadRequest(new { message = "Image file is required." });
+        }
+
+        try
+        {
+            var imageUrl = await _service.UploadImageAsync(id, file);
+            return imageUrl is null
+                ? NotFound(new { message = "Question not found" })
+                : Ok(new { imageUrl });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("{questionId:int}/choices/{choiceId:int}/image")]
+    public async Task<IActionResult> UploadChoiceImage(int questionId, int choiceId, [FromForm] IFormFile? file)
+    {
+        if (file is null)
+        {
+            return BadRequest(new { message = "Image file is required." });
+        }
+
+        try
+        {
+            var imageUrl = await _service.UploadChoiceImageAsync(questionId, choiceId, file);
+            return imageUrl is null
+                ? NotFound(new { message = "Choice not found for this question" })
+                : Ok(new { imageUrl });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [Authorize(Roles = "Admin,Host")]

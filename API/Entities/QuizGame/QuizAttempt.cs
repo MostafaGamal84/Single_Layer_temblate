@@ -21,6 +21,7 @@ public class QuizAttemptAnswer : BaseEntity
     public int QuizAttemptId { get; set; }
     public int QuestionId { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public string? SelectedChoiceIdsJson { get; set; }
     public string? TextAnswer { get; set; }
     public bool IsCorrect { get; set; }
     public int ScoreAwarded { get; set; }

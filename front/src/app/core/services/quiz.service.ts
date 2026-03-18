@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
-import { PagedResult, Quiz } from '../models';
+import { PagedResult, Question, Quiz } from '../models';
 import { map } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -36,6 +36,14 @@ export class QuizService {
   getById(id: number) {
     return this.http.get<any>(`${this.base}/${id}`).pipe(map((res) => this.normalizeQuizDetails(res)));
   }
+  getCategories() {
+    return this.http.get<any[]>(`${this.base}/categories`).pipe(
+      map((res) => this.toArray(res).map((item) => ({
+        id: Number(item?.id ?? item?.Id ?? 0),
+        name: String(item?.name ?? item?.Name ?? '')
+      })))
+    );
+  }
   create(payload: any) { return this.http.post<any>(this.base, payload); }
   update(id: number, payload: any) { return this.http.put<any>(`${this.base}/${id}`, payload); }
   uploadCoverImage(id: number, file: File) {
@@ -45,6 +53,7 @@ export class QuizService {
   }
   delete(id: number) { return this.http.delete(`${this.base}/${id}`); }
   addQuestions(id: number, payload: any[]) { return this.http.post(`${this.base}/${id}/questions`, payload); }
+  removeQuestion(id: number, quizQuestionId: number) { return this.http.delete(`${this.base}/${id}/questions/${quizQuestionId}`); }
   reorderQuestions(id: number, payload: any[]) { return this.http.put(`${this.base}/${id}/questions/reorder`, payload); }
   publish(id: number, isPublished: boolean) { return this.http.put(`${this.base}/${id}/publish`, { isPublished }); }
 
@@ -62,8 +71,14 @@ export class QuizService {
       coverImageUrl: this.resolveAssetUrl(item?.coverImageUrl ?? item?.CoverImageUrl ?? ''),
       mode: Number(item?.mode ?? item?.Mode ?? 0),
       durationMinutes: Number(item?.durationMinutes ?? item?.DurationMinutes ?? 0),
+      totalMarks: this.toNullableNumber(item?.totalMarks ?? item?.TotalMarks),
+      effectiveTotalMarks: Number(item?.effectiveTotalMarks ?? item?.EffectiveTotalMarks ?? 0),
       isPublished: Boolean(item?.isPublished ?? item?.IsPublished ?? false),
-      questionsCount: Number(item?.questionsCount ?? item?.QuestionsCount ?? 0)
+      questionsCount: Number(item?.questionsCount ?? item?.QuestionsCount ?? 0),
+      categories: this.toArray(item?.categories ?? item?.Categories).map((category: any) => ({
+        id: Number(category?.id ?? category?.Id ?? 0),
+        name: String(category?.name ?? category?.Name ?? '')
+      }))
     };
   }
 
@@ -74,7 +89,8 @@ export class QuizService {
       questionTitle: String(q?.questionTitle ?? q?.QuestionTitle ?? ''),
       order: Number(q?.order ?? q?.Order ?? 0),
       pointsOverride: q?.pointsOverride ?? q?.PointsOverride ?? null,
-      answerSeconds: Number(q?.answerSeconds ?? q?.AnswerSeconds ?? 30)
+      answerSeconds: Number(q?.answerSeconds ?? q?.AnswerSeconds ?? 30),
+      question: q?.question ?? q?.Question ? this.normalizeQuestion(q?.question ?? q?.Question) : undefined
     }));
 
     return {
@@ -92,5 +108,34 @@ export class QuizService {
 
     const apiRoot = environment.apiBaseUrl.replace(/\/api\/?$/i, '');
     return raw.startsWith('/') ? `${apiRoot}${raw}` : `${apiRoot}/${raw}`;
+  }
+
+  private normalizeQuestion(item: any): Question {
+    return {
+      id: Number(item?.id ?? item?.Id ?? 0),
+      title: String(item?.title ?? item?.Title ?? ''),
+      text: String(item?.text ?? item?.Text ?? ''),
+      type: Number(item?.type ?? item?.Type ?? 0),
+      selectionMode: Number(item?.selectionMode ?? item?.SelectionMode ?? 1),
+      difficulty: item?.difficulty ?? item?.Difficulty ?? undefined,
+      imageUrl: this.resolveAssetUrl(item?.imageUrl ?? item?.ImageUrl ?? ''),
+      explanation: item?.explanation ?? item?.Explanation ?? undefined,
+      points: Number(item?.points ?? item?.Points ?? 0),
+      answerSeconds: Number(item?.answerSeconds ?? item?.AnswerSeconds ?? 30),
+      choices: this.toArray(item?.choices ?? item?.Choices).map((choice: any, index: number) => ({
+        id: Number(choice?.id ?? choice?.Id ?? 0),
+        choiceText: String(choice?.choiceText ?? choice?.ChoiceText ?? ''),
+        imageUrl: this.resolveAssetUrl(choice?.imageUrl ?? choice?.ImageUrl ?? ''),
+        hasImage: Boolean(choice?.hasImage ?? choice?.HasImage ?? false),
+        isCorrect: Boolean(choice?.isCorrect ?? choice?.IsCorrect ?? false),
+        order: Number(choice?.order ?? choice?.Order ?? index + 1)
+      }))
+    };
+  }
+
+  private toNullableNumber(value: any): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }

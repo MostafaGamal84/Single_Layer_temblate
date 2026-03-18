@@ -2,6 +2,8 @@ using API.Data;
 using API.DTOs.QuizGame;
 using API.Entities.QuizGame;
 using API.Interfaces.QuizGame;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
 
@@ -11,11 +13,19 @@ public class QuestionService : IQuestionService
 {
     private static readonly Regex HtmlTagRegex = new(@"<[^>]+>", RegexOptions.Compiled);
     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
-    private readonly DataContext _context;
+    private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp"
+    };
+    private const long MaxImageSizeBytes = 5 * 1024 * 1024;
 
-    public QuestionService(DataContext context)
+    private readonly DataContext _context;
+    private readonly IWebHostEnvironment _environment;
+
+    public QuestionService(DataContext context, IWebHostEnvironment environment)
     {
         _context = context;
+        _environment = environment;
     }
 
     public async Task<QuestionResponseDto> CreateAsync(QuestionCreateUpdateDto dto, int? userId)
@@ -27,7 +37,9 @@ public class QuestionService : IQuestionService
             Title = dto.Title.Trim(),
             Text = dto.Text.Trim(),
             Type = dto.Type,
+            SelectionMode = NormalizeSelectionMode(dto),
             Difficulty = string.IsNullOrWhiteSpace(dto.Difficulty) ? null : dto.Difficulty.Trim(),
+            Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim(),
             Points = dto.Points,
             AnswerSeconds = NormalizeAnswerSeconds(dto.AnswerSeconds),
             CreatedBy = userId,
@@ -63,26 +75,65 @@ public class QuestionService : IQuestionService
         question.Title = dto.Title.Trim();
         question.Text = dto.Text.Trim();
         question.Type = dto.Type;
+        question.SelectionMode = NormalizeSelectionMode(dto);
         question.Difficulty = string.IsNullOrWhiteSpace(dto.Difficulty) ? null : dto.Difficulty.Trim();
+        question.Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim();
         question.Points = dto.Points;
         question.AnswerSeconds = NormalizeAnswerSeconds(dto.AnswerSeconds);
 
-        var existing = question.Choices.ToList();
-        if (existing.Count > 0)
+        var existingChoices = question.Choices
+            .Where(c => !c.IsDeleted)
+            .ToDictionary(c => c.Id);
+
+        var incomingIds = dto.Choices
+            .Where(c => c.Id > 0)
+            .Select(c => c.Id)
+            .ToHashSet();
+
+        if (incomingIds.Any(idValue => !existingChoices.ContainsKey(idValue)))
         {
-            _context.Set<QuestionChoice>().RemoveRange(existing);
+            throw new ArgumentException("One or more choices are invalid for this question.");
         }
 
-        question.Choices = dto.Choices.Select(c => new QuestionChoice
+        var choicesToRemove = existingChoices.Values
+            .Where(choice => !incomingIds.Contains(choice.Id))
+            .ToList();
+
+        foreach (var choice in choicesToRemove)
         {
-            QuestionId = question.Id,
-            ChoiceText = c.ChoiceText.Trim(),
-            IsCorrect = c.IsCorrect,
-            Order = c.Order
-        }).ToList();
+            DeleteExistingImages(choice.Id, EnsureImageDirectory("question-choices"), "choice");
+            _context.Set<QuestionChoice>().Remove(choice);
+        }
+
+        foreach (var dtoChoice in dto.Choices)
+        {
+            if (dtoChoice.Id > 0 && existingChoices.TryGetValue(dtoChoice.Id, out var existingChoice))
+            {
+                existingChoice.ChoiceText = dtoChoice.ChoiceText.Trim();
+                existingChoice.IsCorrect = dtoChoice.IsCorrect;
+                existingChoice.Order = dtoChoice.Order;
+                continue;
+            }
+
+            question.Choices.Add(new QuestionChoice
+            {
+                QuestionId = question.Id,
+                ChoiceText = dtoChoice.ChoiceText.Trim(),
+                IsCorrect = dtoChoice.IsCorrect,
+                Order = dtoChoice.Order
+            });
+        }
 
         await _context.SaveChangesAsync();
-        return ToQuestionResponse(question);
+
+        var updatedQuestion = await _context.Set<Question>()
+            .AsNoTracking()
+            .Include(x => x.Choices.Where(c => !c.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == question.Id && !x.IsDeleted);
+
+        return updatedQuestion is null
+            ? ToQuestionResponse(question)
+            : ToQuestionResponse(updatedQuestion);
     }
 
     public async Task<bool> SoftDeleteAsync(int id)
@@ -121,12 +172,20 @@ public class QuestionService : IQuestionService
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim().ToLower();
-            dbQuery = dbQuery.Where(x => x.Title.ToLower().Contains(search) || x.Text.ToLower().Contains(search));
+            dbQuery = dbQuery.Where(x =>
+                x.Title.ToLower().Contains(search) ||
+                x.Text.ToLower().Contains(search) ||
+                (x.Explanation != null && x.Explanation.ToLower().Contains(search)));
         }
 
         if (query.Type.HasValue)
         {
             dbQuery = dbQuery.Where(x => x.Type == query.Type.Value);
+        }
+
+        if (query.SelectionMode.HasValue)
+        {
+            dbQuery = dbQuery.Where(x => x.SelectionMode == query.SelectionMode.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(query.Difficulty))
@@ -151,7 +210,65 @@ public class QuestionService : IQuestionService
         };
     }
 
-    private static QuestionResponseDto ToQuestionResponse(Question question)
+    public async Task<string?> UploadImageAsync(int questionId, IFormFile file)
+    {
+        var exists = await _context.Set<Question>()
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == questionId && !x.IsDeleted);
+
+        if (!exists)
+        {
+            return null;
+        }
+
+        ValidateImageFile(file);
+
+        var uploadsDirectory = EnsureImageDirectory("questions");
+        DeleteExistingImages(questionId, uploadsDirectory, "question");
+
+        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant() ?? ".png";
+        var fileName = $"question-{questionId}{extension}";
+        var fullPath = Path.Combine(uploadsDirectory, fileName);
+
+        await using (var stream = File.Create(fullPath))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var relativePath = $"/uploads/questions/{fileName}";
+        return AddVersion(relativePath, File.GetLastWriteTimeUtc(fullPath));
+    }
+
+    public async Task<string?> UploadChoiceImageAsync(int questionId, int choiceId, IFormFile file)
+    {
+        var exists = await _context.Set<QuestionChoice>()
+            .AsNoTracking()
+            .AnyAsync(x => x.Id == choiceId && x.QuestionId == questionId && !x.IsDeleted && !x.Question.IsDeleted);
+
+        if (!exists)
+        {
+            return null;
+        }
+
+        ValidateImageFile(file);
+
+        var uploadsDirectory = EnsureImageDirectory("question-choices");
+        DeleteExistingImages(choiceId, uploadsDirectory, "choice");
+
+        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant() ?? ".png";
+        var fileName = $"choice-{choiceId}{extension}";
+        var fullPath = Path.Combine(uploadsDirectory, fileName);
+
+        await using (var stream = File.Create(fullPath))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var relativePath = $"/uploads/question-choices/{fileName}";
+        return AddVersion(relativePath, File.GetLastWriteTimeUtc(fullPath));
+    }
+
+    private QuestionResponseDto ToQuestionResponse(Question question)
     {
         return new QuestionResponseDto
         {
@@ -159,7 +276,10 @@ public class QuestionService : IQuestionService
             Title = question.Title,
             Text = question.Text,
             Type = question.Type,
+            SelectionMode = question.SelectionMode,
             Difficulty = question.Difficulty,
+            ImageUrl = GetQuestionImageUrl(question.Id),
+            Explanation = question.Explanation,
             Points = question.Points,
             AnswerSeconds = question.AnswerSeconds,
             CreatedBy = question.CreatedBy,
@@ -167,13 +287,8 @@ public class QuestionService : IQuestionService
             Choices = question.Choices
                 .Where(c => !c.IsDeleted)
                 .OrderBy(c => c.Order)
-                .Select(c => new QuestionChoiceDto
-                {
-                    Id = c.Id,
-                    ChoiceText = c.ChoiceText,
-                    IsCorrect = c.IsCorrect,
-                    Order = c.Order
-                }).ToList()
+                .Select(ToChoiceDto)
+                .ToList()
         };
     }
 
@@ -201,9 +316,9 @@ public class QuestionService : IQuestionService
 
         foreach (var choice in dto.Choices)
         {
-            if (string.IsNullOrWhiteSpace(choice.ChoiceText))
+            if (string.IsNullOrWhiteSpace(choice.ChoiceText) && !choice.HasImage)
             {
-                throw new ArgumentException("Choice text cannot be empty.");
+                throw new ArgumentException("Each choice must include text or an image.");
             }
         }
 
@@ -214,9 +329,16 @@ public class QuestionService : IQuestionService
                 throw new ArgumentException("At least 2 choices are required for this question type.");
             }
 
-            if (dto.Choices.Count(c => c.IsCorrect) == 0)
+            var correctChoices = dto.Choices.Count(c => c.IsCorrect);
+            if (correctChoices == 0)
             {
                 throw new ArgumentException("At least one correct choice is required.");
+            }
+
+            var requiresSingleAnswer = dto.Type == QuestionType.TrueFalse || dto.SelectionMode != QuestionSelectionMode.Multiple;
+            if (requiresSingleAnswer && correctChoices != 1)
+            {
+                throw new ArgumentException("Single-answer questions must have exactly one correct choice.");
             }
         }
 
@@ -227,11 +349,28 @@ public class QuestionService : IQuestionService
                 throw new ArgumentException("Short answer requires exactly one answer key.");
             }
 
+            if (string.IsNullOrWhiteSpace(dto.Choices[0].ChoiceText))
+            {
+                throw new ArgumentException("Short answer key cannot be empty.");
+            }
+
             if (!dto.Choices[0].IsCorrect)
             {
                 throw new ArgumentException("Short answer key must be marked as correct.");
             }
         }
+    }
+
+    private static QuestionSelectionMode NormalizeSelectionMode(QuestionCreateUpdateDto dto)
+    {
+        if (dto.Type != QuestionType.MultipleChoice)
+        {
+            return QuestionSelectionMode.Single;
+        }
+
+        return dto.SelectionMode == QuestionSelectionMode.Multiple
+            ? QuestionSelectionMode.Multiple
+            : QuestionSelectionMode.Single;
     }
 
     private static int NormalizeAnswerSeconds(int value)
@@ -255,6 +394,107 @@ public class QuestionService : IQuestionService
 
         return WhitespaceRegex.Replace(withoutTags, " ").Trim();
     }
+
+    private static void ValidateImageFile(IFormFile file)
+    {
+        if (file.Length <= 0)
+        {
+            throw new ArgumentException("Image file is empty.");
+        }
+
+        if (file.Length > MaxImageSizeBytes)
+        {
+            throw new ArgumentException("Image size must be 5 MB or less.");
+        }
+
+        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(extension) || !AllowedImageExtensions.Contains(extension))
+        {
+            throw new ArgumentException("Only JPG, JPEG, PNG, or WEBP images are allowed.");
+        }
+    }
+
+    private QuestionChoiceDto ToChoiceDto(QuestionChoice choice)
+    {
+        var imageUrl = GetChoiceImageUrl(choice.Id);
+        return new QuestionChoiceDto
+        {
+            Id = choice.Id,
+            ChoiceText = choice.ChoiceText,
+            ImageUrl = imageUrl,
+            HasImage = !string.IsNullOrWhiteSpace(imageUrl),
+            IsCorrect = choice.IsCorrect,
+            Order = choice.Order
+        };
+    }
+
+    private string GetQuestionImageUrl(int questionId)
+    {
+        return GetImageUrl(questionId, "questions", "question");
+    }
+
+    private string GetChoiceImageUrl(int choiceId)
+    {
+        return GetImageUrl(choiceId, "question-choices", "choice");
+    }
+
+    private string GetImageUrl(int entityId, string folderName, string filePrefix)
+    {
+        var uploadsDirectory = GetImageDirectoryPath(folderName);
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"{filePrefix}-{entityId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault(path => AllowedImageExtensions.Contains(Path.GetExtension(path)));
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/{folderName}/{fileName}";
+        return AddVersion(relativePath, File.GetLastWriteTimeUtc(filePath));
+    }
+
+    private string EnsureImageDirectory(string folderName)
+    {
+        var path = GetImageDirectoryPath(folderName);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private string GetImageDirectoryPath(string folderName)
+    {
+        var webRoot = _environment.WebRootPath;
+        if (string.IsNullOrWhiteSpace(webRoot))
+        {
+            webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        }
+
+        return Path.Combine(webRoot, "uploads", folderName);
+    }
+
+    private static string AddVersion(string relativePath, DateTime lastWriteUtc)
+    {
+        var version = new DateTimeOffset(lastWriteUtc).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private static void DeleteExistingImages(int entityId, string uploadsDirectory, string filePrefix)
+    {
+        foreach (var path in Directory.EnumerateFiles(uploadsDirectory, $"{filePrefix}-{entityId}.*", SearchOption.TopDirectoryOnly))
+        {
+            var extension = Path.GetExtension(path);
+            if (!AllowedImageExtensions.Contains(extension))
+            {
+                continue;
+            }
+
+            File.Delete(path);
+        }
+    }
 }
-
-

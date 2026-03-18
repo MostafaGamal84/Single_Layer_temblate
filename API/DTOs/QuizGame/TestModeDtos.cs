@@ -17,6 +17,7 @@ public class SubmitTestAnswerDto
 {
     public int QuestionId { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public List<int> SelectedChoiceIds { get; set; } = new();
     public string? TextAnswer { get; set; }
 }
 
@@ -54,9 +55,11 @@ public class TestModeQuestionDto
     public int TotalQuestions { get; set; }
     public bool IsAnswered { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public List<int> SelectedChoiceIds { get; set; } = new();
     public string? TextAnswer { get; set; }
     public bool? IsCorrect { get; set; }
     public int? CorrectChoiceId { get; set; }
+    public List<int> CorrectChoiceIds { get; set; } = new();
     public QuestionResponseDto Question { get; set; } = new();
 }
 
@@ -65,7 +68,9 @@ public class TestAnswerSubmitResponseDto
     public bool Accepted { get; set; }
     public bool? IsCorrect { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public List<int> SelectedChoiceIds { get; set; } = new();
     public int? CorrectChoiceId { get; set; }
+    public List<int> CorrectChoiceIds { get; set; } = new();
     public int? NextQuestionIndex { get; set; }
     public int AnsweredQuestions { get; set; }
     public int RemainingQuestions { get; set; }
@@ -82,6 +87,7 @@ public class TestResultReviewItemDto
     public bool IsCorrect { get; set; }
     public string? SelectedAnswerText { get; set; }
     public string CorrectAnswerText { get; set; } = string.Empty;
+    public string? Explanation { get; set; }
 }
 
 public class TestResultDto

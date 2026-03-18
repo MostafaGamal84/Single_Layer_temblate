@@ -8,6 +8,9 @@ public class QuizCreateUpdateDto
     public string? Description { get; set; }
     public QuizMode Mode { get; set; }
     public int DurationMinutes { get; set; }
+    public int? TotalMarks { get; set; }
+    public bool IsPublished { get; set; }
+    public List<string> Categories { get; set; } = new();
 }
 
 public class QuizQuestionAddDto
@@ -33,6 +36,13 @@ public class QuizQuestionResponseDto
     public int Order { get; set; }
     public int? PointsOverride { get; set; }
     public int AnswerSeconds { get; set; }
+    public QuestionResponseDto? Question { get; set; }
+}
+
+public class QuizCategoryDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
 }
 
 public class QuizResponseDto
@@ -43,10 +53,13 @@ public class QuizResponseDto
     public string? CoverImageUrl { get; set; }
     public QuizMode Mode { get; set; }
     public int DurationMinutes { get; set; }
+    public int? TotalMarks { get; set; }
+    public int EffectiveTotalMarks { get; set; }
     public bool IsPublished { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public int QuestionsCount { get; set; }
+    public List<QuizCategoryDto> Categories { get; set; } = new();
     public List<QuizQuestionResponseDto> Questions { get; set; } = new();
 }
 
@@ -59,4 +72,5 @@ public class QuizQueryDto : PagedRequestDto
 {
     public QuizMode? Mode { get; set; }
     public bool? IsPublished { get; set; }
+    public string? Category { get; set; }
 }

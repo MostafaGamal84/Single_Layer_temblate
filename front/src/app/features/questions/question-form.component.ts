@@ -5,21 +5,70 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { EditorModule } from 'primeng/editor';
 import { QuestionService } from '../../core/services/question.service';
 import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
+import { forkJoin, of, switchMap } from 'rxjs';
+
+type QuestionMode = 'single' | 'multiple' | 'truefalse' | 'short';
+type EditableChoice = {
+  id?: number;
+  clientKey: string;
+  choiceText: string;
+  imageUrl?: string;
+  hasImage?: boolean;
+  isCorrect: boolean;
+  order: number;
+};
 
 @Component({
   standalone: true,
   imports: [CommonModule, FormsModule, EditorModule, SafeRichTextPipe],
   template: `
     <div class="card question-form-card">
-      <h2>{{ id ? 'Edit' : 'Create' }} Question</h2>
+      <div class="form-head">
+        <div>
+          <p class="eyebrow">Question Bank</p>
+          <h2>{{ id ? 'Edit Question' : 'Create Question' }}</h2>
+        </div>
+        <button type="button" class="secondary" (click)="goBack()">Back</button>
+      </div>
 
-      <div class="col">
-        <div class="col" style="gap:4px;">
+      <div class="form-grid">
+        <div class="field span-2">
           <label for="question-title">Title</label>
-          <input id="question-title" name="questionTitle" [(ngModel)]="model.title" placeholder="Title" />
+          <input id="question-title" name="questionTitle" [(ngModel)]="model.title" placeholder="Photosynthesis definition" />
         </div>
 
-        <div class="col editor-field">
+        <div class="field">
+          <label for="question-mode">Answer format</label>
+          <select id="question-mode" name="questionMode" [(ngModel)]="questionMode" (change)="applyQuestionMode()">
+            <option value="single">Single Choice</option>
+            <option value="multiple">Multiple Choice</option>
+            <option value="truefalse">True / False</option>
+            <option value="short">Short Answer</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="question-points">Points</label>
+          <input id="question-points" name="questionPoints" type="number" [(ngModel)]="model.points" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="question-answer-seconds">Answer time (sec)</label>
+          <input id="question-answer-seconds" name="questionAnswerSeconds" type="number" [(ngModel)]="model.answerSeconds" min="5" max="300" />
+        </div>
+
+        <div class="field">
+          <label for="question-difficulty">Difficulty (optional)</label>
+          <input id="question-difficulty" name="questionDifficulty" [(ngModel)]="model.difficulty" placeholder="Easy / Medium / Hard" />
+        </div>
+
+        <div class="field span-2">
+          <label for="question-image">Image (optional)</label>
+          <input id="question-image" name="questionImage" type="file" accept="image/png,image/jpeg,image/webp" (change)="onImageSelected($event)" />
+          <small class="inline-note">Upload an image to display below the question text.</small>
+        </div>
+
+        <div class="field span-2 editor-field">
           <label for="question-text-editor">Question text</label>
           <p-editor
             [(ngModel)]="model.text"
@@ -53,106 +102,162 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
               <span class="ql-formats">
                 <button type="button" class="ql-list" value="ordered" aria-label="Ordered list"></button>
                 <button type="button" class="ql-list" value="bullet" aria-label="Bullet list"></button>
-                <select class="ql-align" aria-label="Text alignment">
-                  <option selected></option>
-                  <option value="center">Center</option>
-                  <option value="right">Right</option>
-                  <option value="justify">Justify</option>
-                </select>
-              </span>
-              <span class="ql-formats">
                 <button type="button" class="ql-link" aria-label="Insert link"></button>
-                <button type="button" class="ql-image" aria-label="Insert image"></button>
-                <button type="button" class="ql-code-block" aria-label="Code block"></button>
-              </span>
-              <span class="ql-formats">
                 <button type="button" class="ql-clean" aria-label="Clear formatting"></button>
               </span>
             </ng-template>
           </p-editor>
-          <small class="inline-note">Formatting like bold, underline, color, lists, alignment, links, and images will be saved with the question.</small>
         </div>
 
-        @if (hasMeaningfulRichText(model.text)) {
-          <div class="question-preview">
-            <span class="preview-label">Student Preview</span>
-            <div class="rich-text-content" [innerHTML]="model.text | safeRichText"></div>
-          </div>
-        }
-
-        <div class="row">
-          <div class="col" style="gap:4px;min-width:min(180px,100%);flex:1;">
-            <label for="question-type">Question type</label>
-            <select id="question-type" name="questionType" [(ngModel)]="model.type" (change)="onTypeChanged()">
-              <option [ngValue]="1">Multiple Choice</option>
-              <option [ngValue]="2">True / False</option>
-              <option [ngValue]="3">Short Answer</option>
-            </select>
-          </div>
-
-          <div class="col" style="gap:4px;min-width:min(120px,100%);">
-            <label for="question-points">Points</label>
-            <input id="question-points" name="questionPoints" type="number" [(ngModel)]="model.points" placeholder="Points" />
-          </div>
-
-          <div class="col" style="gap:4px;min-width:min(160px,100%);">
-            <label for="question-answer-seconds">Answer time (sec)</label>
-            <input id="question-answer-seconds" name="questionAnswerSeconds" type="number" [(ngModel)]="model.answerSeconds" min="5" max="300" placeholder="Answer time (sec)" />
-          </div>
-
-          <div class="col" style="gap:4px;min-width:min(180px,100%);flex:1;">
-            <label for="question-difficulty">Difficulty</label>
-            <input id="question-difficulty" name="questionDifficulty" [(ngModel)]="model.difficulty" placeholder="Difficulty (optional)" />
-          </div>
+        <div class="field span-2">
+          <label for="question-explanation">Explanation (optional)</label>
+          <textarea id="question-explanation" name="questionExplanation" rows="4" [(ngModel)]="model.explanation" placeholder="Explain why this answer is correct"></textarea>
         </div>
       </div>
 
-      @if (model.type !== 3) {
-        <h3>Choices</h3>
-        @for (choice of model.choices; track $index) {
-          <div class="row" style="margin-bottom:8px;">
-            <div class="col" style="gap:4px;flex:1;">
-              <label [attr.for]="'question-choice-' + $index">Choice {{ $index + 1 }}</label>
-              <input [attr.id]="'question-choice-' + $index" [attr.name]="'questionChoice' + $index" [(ngModel)]="choice.choiceText" [placeholder]="'Choice ' + ($index + 1)" />
-            </div>
-            <label [attr.for]="'question-choice-correct-' + $index">
-              <input [attr.id]="'question-choice-correct-' + $index" [attr.name]="'questionChoiceCorrect' + $index" type="checkbox" [(ngModel)]="choice.isCorrect" /> Correct
-            </label>
-            <button type="button" class="danger" (click)="removeChoice($index)">X</button>
-          </div>
-        }
-        <button type="button" class="secondary" (click)="addChoice()">Add choice</button>
+      @if (imagePreviewUrl) {
+        <div class="preview-block">
+          <span class="preview-label">Image preview</span>
+          <img class="question-image" [src]="imagePreviewUrl" alt="Question preview" />
+        </div>
       }
 
-      @if (model.type === 3) {
-        <h3>Short Answer Key</h3>
-        <div class="col" style="gap:4px;">
+      @if (hasMeaningfulRichText(model.text)) {
+        <div class="question-preview">
+          <span class="preview-label">Student preview</span>
+          <div class="rich-text-content" [innerHTML]="model.text | safeRichText"></div>
+        </div>
+      }
+
+      @if (questionMode !== 'short') {
+        <div class="choice-section">
+          <div class="section-head">
+            <div>
+              <h3>Choices</h3>
+              <p class="section-copy">{{ choiceGuidance() }}</p>
+            </div>
+            @if (questionMode === 'single' || questionMode === 'multiple') {
+              <button type="button" class="secondary" (click)="addChoice()">Add choice</button>
+            }
+          </div>
+
+          @for (choice of model.choices; track choice.id || choice.clientKey) {
+            <div class="choice-row">
+              <span class="choice-code">{{ choiceLabel($index) }}</span>
+              <div class="choice-editor">
+                <input
+                  [name]="'questionChoice' + $index"
+                  [(ngModel)]="choice.choiceText"
+                  [placeholder]="'Choice ' + choiceLabel($index) + ' text (optional if image uploaded)'" />
+                <div class="choice-upload-row">
+                  <input
+                    [id]="'questionChoiceImage' + $index"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    (change)="onChoiceImageSelected($index, $event)" />
+                  <small class="inline-note">You can use text, image, or both for this answer.</small>
+                </div>
+
+                @if (choice.imageUrl) {
+                  <img class="choice-preview-image" [src]="choice.imageUrl" [alt]="'Choice ' + choiceLabel($index) + ' preview'" />
+                }
+              </div>
+
+              @if (usesSingleCorrect()) {
+                <label class="correct-mark">
+                  <input
+                    type="radio"
+                    name="singleCorrectChoice"
+                    [checked]="choice.isCorrect"
+                    (change)="setSingleCorrectChoice($index)" />
+                  Correct
+                </label>
+              } @else {
+                <label class="correct-mark">
+                  <input type="checkbox" [(ngModel)]="choice.isCorrect" [name]="'questionChoiceCorrect' + $index" />
+                  Correct
+                </label>
+              }
+
+              @if (questionMode === 'single' || questionMode === 'multiple') {
+                <button type="button" class="danger" (click)="removeChoice($index)">Remove</button>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (questionMode === 'short') {
+        <div class="field">
           <label for="question-short-answer-key">Expected answer</label>
           <input id="question-short-answer-key" name="questionShortAnswerKey" [(ngModel)]="shortAnswerKey" placeholder="Expected answer" />
         </div>
       }
 
-      <div class="row" style="margin-top:12px;">
-        <button type="button" [disabled]="loading" (click)="save()">{{ loading ? 'Saving...' : 'Save' }}</button>
-        <button type="button" class="secondary" (click)="goBack()">Back</button>
+      <div class="action-row">
+        <button type="button" [disabled]="loading" (click)="save()">{{ loading ? 'Saving...' : 'Save Question' }}</button>
+        <button type="button" class="secondary" [disabled]="loading" (click)="goBack()">Cancel</button>
       </div>
 
-      @if (error) { <div class="alert" style="margin-top:10px;">{{ error }}</div> }
+      @if (error) { <div class="alert">{{ error }}</div> }
     </div>
   `,
   styles: [`
     .question-form-card {
       display: grid;
-      gap: 14px;
+      gap: 16px;
     }
 
-    .question-form-card h2,
-    .question-form-card h3 {
-      margin-bottom: 0;
+    .form-head,
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .form-head h2,
+    .section-head h3 {
+      margin: 0;
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .span-2 {
+      grid-column: span 2;
+    }
+
+    .field,
+    .preview-block,
+    .question-preview,
+    .choice-section {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
     }
 
     .editor-field {
-      gap: 8px;
+      gap: 10px;
+    }
+
+    .preview-label {
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .question-image {
+      width: min(320px, 100%);
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
     }
 
     .question-preview {
@@ -162,14 +267,75 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       background: var(--surface-soft);
     }
 
-    .preview-label {
+    .section-copy {
+      margin: 6px 0 0;
+      max-width: 56ch;
+    }
+
+    .choice-row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      align-items: start;
+    }
+
+    .choice-code {
+      width: 38px;
+      height: 38px;
       display: inline-flex;
-      margin-bottom: 10px;
-      color: var(--muted-strong);
-      font-size: 0.74rem;
-      font-weight: 800;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      font-weight: 700;
+    }
+
+    .choice-editor,
+    .choice-upload-row {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .choice-preview-image {
+      width: min(220px, 100%);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+    }
+
+    .correct-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 820px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .span-2 {
+        grid-column: auto;
+      }
+
+      .choice-row {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .choice-code {
+        width: 100%;
+        border-radius: 14px;
+      }
     }
   `]
 })
@@ -178,19 +344,23 @@ export class QuestionFormComponent implements OnInit {
   loading = false;
   error = '';
   shortAnswerKey = '';
-  readonly editorFormats = ['header', 'font', 'bold', 'italic', 'underline', 'color', 'background', 'list', 'align', 'link', 'image', 'code-block'];
+  questionMode: QuestionMode = 'single';
+  imagePreviewUrl = '';
+  private nextChoiceKey = 1;
+  private selectedImageFile: File | null = null;
+  private selectedChoiceImageFiles = new Map<string, File>();
+  readonly editorFormats = ['header', 'font', 'bold', 'italic', 'underline', 'color', 'background', 'list', 'link', 'clean'];
 
   model: any = {
     title: '',
     text: '',
     type: 1,
+    selectionMode: 1,
     difficulty: '',
+    explanation: '',
     points: 100,
     answerSeconds: 30,
-    choices: [
-      { choiceText: '', isCorrect: false, order: 1 },
-      { choiceText: '', isCorrect: true, order: 2 }
-    ]
+    choices: this.createDefaultChoices()
   };
 
   constructor(
@@ -202,81 +372,190 @@ export class QuestionFormComponent implements OnInit {
   ngOnInit(): void {
     const rawId = this.route.snapshot.paramMap.get('id');
     this.id = rawId ? Number(rawId) : undefined;
-    if (this.id) {
-      this.service.getById(this.id).subscribe((res: any) => {
-        this.model = {
-          ...res,
-          text: String(res?.text ?? ''),
-          answerSeconds: Number(res?.answerSeconds ?? 30),
-          choices: res.choices || []
-        };
-        if (this.model.type === 3) {
-          this.shortAnswerKey = this.model.choices?.find((x: any) => x.isCorrect)?.choiceText || '';
-        }
-      });
+    if (!this.id) {
+      this.applyQuestionMode();
+      return;
     }
+
+    this.service.getById(this.id).subscribe((res: any) => {
+      this.model = {
+        ...res,
+        text: String(res?.text ?? ''),
+        explanation: String(res?.explanation ?? ''),
+        answerSeconds: Number(res?.answerSeconds ?? 30),
+        choices: this.hydrateChoices(res?.choices || [])
+      };
+      this.questionMode = this.resolveQuestionMode(res);
+      this.imagePreviewUrl = res.imageUrl || '';
+      if (this.questionMode === 'short') {
+        this.shortAnswerKey = this.model.choices?.find((item: any) => item.isCorrect)?.choiceText || '';
+      }
+      this.applyQuestionMode(false);
+    });
   }
 
-  onTypeChanged(): void {
-    if (this.model.type === 2) {
-      this.model.choices = [
-        { choiceText: 'True', isCorrect: true, order: 1 },
-        { choiceText: 'False', isCorrect: false, order: 2 }
-      ];
+  applyQuestionMode(resetChoices = true): void {
+    if (this.questionMode === 'single') {
+      this.model.type = 1;
+      this.model.selectionMode = 1;
+      if (resetChoices && this.model.choices.length < 2) {
+        this.model.choices = this.createDefaultChoices();
+        this.selectedChoiceImageFiles.clear();
+      }
     }
 
-    if (this.model.type === 3) {
+    if (this.questionMode === 'multiple') {
+      this.model.type = 1;
+      this.model.selectionMode = 2;
+      if (resetChoices && this.model.choices.length < 2) {
+        this.model.choices = this.createDefaultChoices();
+        this.selectedChoiceImageFiles.clear();
+      }
+    }
+
+    if (this.questionMode === 'truefalse') {
+      this.model.type = 2;
+      this.model.selectionMode = 1;
+      if (resetChoices || this.model.choices.length !== 2) {
+        this.model.choices = [
+          this.createChoice({ choiceText: 'True', isCorrect: true, order: 1 }),
+          this.createChoice({ choiceText: 'False', isCorrect: false, order: 2 })
+        ];
+        this.selectedChoiceImageFiles.clear();
+      }
+    }
+
+    if (this.questionMode === 'short') {
+      this.model.type = 3;
+      this.model.selectionMode = 1;
       this.model.choices = [];
-      this.shortAnswerKey = '';
+      this.selectedChoiceImageFiles.clear();
     }
 
-    if (this.model.type === 1 && this.model.choices.length < 2) {
-      this.model.choices = [
-        { choiceText: '', isCorrect: false, order: 1 },
-        { choiceText: '', isCorrect: true, order: 2 }
-      ];
-    }
+    this.reindexChoices();
   }
 
   addChoice(): void {
-    this.model.choices.push({ choiceText: '', isCorrect: false, order: this.model.choices.length + 1 });
+    this.model.choices.push(this.createChoice({ isCorrect: false, order: this.model.choices.length + 1 }));
   }
 
   removeChoice(index: number): void {
+    if (this.model.choices.length <= 2) {
+      return;
+    }
+
+    const removedChoice = this.model.choices[index];
+    if (removedChoice?.clientKey) {
+      this.selectedChoiceImageFiles.delete(removedChoice.clientKey);
+    }
+
     this.model.choices.splice(index, 1);
-    this.model.choices.forEach((x: any, i: number) => x.order = i + 1);
+    if (this.usesSingleCorrect() && !this.model.choices.some((item: any) => item.isCorrect)) {
+      this.model.choices[0].isCorrect = true;
+    }
+    this.reindexChoices();
+  }
+
+  setSingleCorrectChoice(index: number): void {
+    this.model.choices = this.model.choices.map((choice: any, currentIndex: number) => ({
+      ...choice,
+      isCorrect: currentIndex === index
+    }));
   }
 
   save(): void {
     this.loading = true;
     this.error = '';
-    this.model.answerSeconds = this.normalizeAnswerSeconds(this.model.answerSeconds);
+    this.model.answerSeconds = this.normalizeBetween(this.model.answerSeconds, 5, 300, 30);
+    this.model.points = this.normalizeBetween(this.model.points, 1, 100000, 100);
     this.model.text = this.normalizeRichText(this.model.text);
+    this.model.explanation = String(this.model.explanation || '').trim();
 
-    if (!this.hasMeaningfulRichText(this.model.text)) {
-      this.loading = false;
-      this.error = 'Question text is required';
+    if (!this.model.title?.trim()) {
+      this.fail('Question title is required');
       return;
     }
 
-    if (this.model.type === 3) {
+    if (!this.hasMeaningfulRichText(this.model.text)) {
+      this.fail('Question text is required');
+      return;
+    }
+
+    if (this.questionMode === 'short') {
       const normalizedKey = (this.shortAnswerKey || '').trim();
       if (!normalizedKey) {
-        this.loading = false;
-        this.error = 'Short answer key is required';
+        this.fail('Short answer key is required');
         return;
       }
 
-      this.model.choices = [{ choiceText: normalizedKey, isCorrect: true, order: 1 }];
+      this.model.choices = [this.createChoice({ choiceText: normalizedKey, isCorrect: true, order: 1 })];
     } else {
-      this.model.choices.forEach((x: any, i: number) => x.order = i + 1);
+      this.reindexChoices();
+      if (!this.model.choices.every((choice: EditableChoice) => this.choiceHasContent(choice))) {
+        this.fail('Every choice must have text or an image');
+        return;
+      }
+
+      if (this.usesSingleCorrect() && this.model.choices.filter((choice: any) => choice.isCorrect).length !== 1) {
+        this.fail('Select exactly one correct answer');
+        return;
+      }
+
+      if (!this.usesSingleCorrect() && this.model.choices.filter((choice: any) => choice.isCorrect).length === 0) {
+        this.fail('Select at least one correct answer');
+        return;
+      }
     }
 
-    const request$ = this.id
-      ? this.service.update(this.id, this.model)
-      : this.service.create(this.model);
+    const payload = {
+      title: String(this.model.title || '').trim(),
+      text: this.model.text,
+      type: this.model.type,
+      selectionMode: this.model.selectionMode,
+      difficulty: String(this.model.difficulty || '').trim() || null,
+      explanation: this.model.explanation || null,
+      points: this.model.points,
+      answerSeconds: this.model.answerSeconds,
+      choices: (this.model.choices || []).map((choice: EditableChoice) => ({
+        id: Number(choice.id ?? 0),
+        choiceText: String(choice.choiceText || '').trim(),
+        hasImage: Boolean(choice.hasImage || choice.imageUrl),
+        isCorrect: choice.isCorrect,
+        order: choice.order
+      }))
+    };
 
-    request$.subscribe({
+    const request$ = this.id ? this.service.update(this.id, payload) : this.service.create(payload);
+    request$.pipe(
+      switchMap((question: any) => {
+        const questionId = Number(question?.id ?? this.id ?? 0);
+        if (!questionId) {
+          return of(question);
+        }
+
+        const uploadRequests: any[] = [];
+        if (this.selectedImageFile) {
+          uploadRequests.push(this.service.uploadImage(questionId, this.selectedImageFile));
+        }
+
+        const savedChoices = Array.isArray(question?.choices) ? question.choices : [];
+        for (const localChoice of this.model.choices as EditableChoice[]) {
+          const file = this.selectedChoiceImageFiles.get(localChoice.clientKey);
+          if (!file) {
+            continue;
+          }
+
+          const savedChoice = savedChoices.find((item: any) => Number(item?.id ?? 0) === Number(localChoice.id ?? 0))
+            ?? savedChoices.find((item: any) => Number(item?.order ?? 0) === Number(localChoice.order ?? 0));
+          const choiceId = Number(savedChoice?.id ?? 0);
+          if (choiceId > 0) {
+            uploadRequests.push(this.service.uploadChoiceImage(questionId, choiceId, file));
+          }
+        }
+
+        return uploadRequests.length ? forkJoin(uploadRequests).pipe(switchMap(() => of(question))) : of(question);
+      })
+    ).subscribe({
       next: () => {
         this.loading = false;
         this.router.navigate(['/questions']);
@@ -292,16 +571,108 @@ export class QuestionFormComponent implements OnInit {
     this.router.navigate(['/questions']);
   }
 
+  usesSingleCorrect(): boolean {
+    return this.questionMode !== 'multiple';
+  }
+
+  choiceGuidance(): string {
+    if (this.questionMode === 'multiple') {
+      return 'Mark every correct answer. Students will need to select the complete correct set.';
+    }
+
+    if (this.questionMode === 'truefalse') {
+      return 'Choose whether True or False is the correct answer.';
+    }
+
+    return 'Mark the single correct answer for this question.';
+  }
+
+  choiceLabel(index: number): string {
+    return String.fromCharCode(65 + index);
+  }
+
+  onImageSelected(event: Event): void {
+    this.error = '';
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files.length ? input.files[0] : null;
+
+    if (!file) {
+      this.selectedImageFile = null;
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      this.selectedImageFile = null;
+      this.error = 'Only JPG, PNG, or WEBP images are allowed.';
+      input.value = '';
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      this.selectedImageFile = null;
+      this.error = 'Image size must be 5 MB or less.';
+      input.value = '';
+      return;
+    }
+
+    this.selectedImageFile = file;
+    this.imagePreviewUrl = URL.createObjectURL(file);
+  }
+
+  onChoiceImageSelected(index: number, event: Event): void {
+    this.error = '';
+    const choice = this.model.choices?.[index] as EditableChoice | undefined;
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files.length ? input.files[0] : null;
+
+    if (!choice?.clientKey || !file) {
+      return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      this.selectedChoiceImageFiles.delete(choice.clientKey);
+      this.error = 'Only JPG, PNG, or WEBP images are allowed for answers.';
+      input.value = '';
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      this.selectedChoiceImageFiles.delete(choice.clientKey);
+      this.error = 'Answer image size must be 5 MB or less.';
+      input.value = '';
+      return;
+    }
+
+    this.selectedChoiceImageFiles.set(choice.clientKey, file);
+    choice.hasImage = true;
+    choice.imageUrl = URL.createObjectURL(file);
+  }
+
   hasMeaningfulRichText(value: string | null | undefined): boolean {
     return this.extractPlainText(value).length > 0;
   }
 
-  private normalizeAnswerSeconds(value: any): number {
+  private resolveQuestionMode(question: any): QuestionMode {
+    const type = Number(question?.type ?? 1);
+    const selectionMode = Number(question?.selectionMode ?? 1);
+    if (type === 3) return 'short';
+    if (type === 2) return 'truefalse';
+    return selectionMode === 2 ? 'multiple' : 'single';
+  }
+
+  private fail(message: string): void {
+    this.loading = false;
+    this.error = message;
+  }
+
+  private normalizeBetween(value: any, min: number, max: number, fallback: number): number {
     const parsed = Number(value);
-    if (!Number.isFinite(parsed)) return 30;
-    if (parsed < 5) return 5;
-    if (parsed > 300) return 300;
-    return Math.floor(parsed);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.floor(parsed)));
   }
 
   private normalizeRichText(value: string | null | undefined): string {
@@ -316,6 +687,47 @@ export class QuestionFormComponent implements OnInit {
       .replace(/\s+/g, ' ')
       .trim();
   }
+
+  private reindexChoices(): void {
+    this.model.choices = (this.model.choices || []).map((choice: any, index: number) => ({
+      ...choice,
+      order: index + 1
+    }));
+  }
+
+  private choiceHasContent(choice: EditableChoice): boolean {
+    return Boolean(String(choice.choiceText || '').trim() || choice.hasImage || choice.imageUrl);
+  }
+
+  private hydrateChoices(rawChoices: any[]): EditableChoice[] {
+    return (rawChoices || []).map((choice: any, index: number) => this.createChoice({
+      id: Number(choice?.id ?? 0) || undefined,
+      choiceText: String(choice?.choiceText ?? ''),
+      imageUrl: String(choice?.imageUrl ?? ''),
+      hasImage: Boolean(choice?.hasImage ?? choice?.imageUrl),
+      isCorrect: Boolean(choice?.isCorrect ?? false),
+      order: Number(choice?.order ?? index + 1)
+    }));
+  }
+
+  private createDefaultChoices(): EditableChoice[] {
+    return [
+      this.createChoice({ choiceText: '', isCorrect: true, order: 1 }),
+      this.createChoice({ choiceText: '', isCorrect: false, order: 2 }),
+      this.createChoice({ choiceText: '', isCorrect: false, order: 3 }),
+      this.createChoice({ choiceText: '', isCorrect: false, order: 4 })
+    ];
+  }
+
+  private createChoice(partial: Partial<EditableChoice>): EditableChoice {
+    return {
+      id: partial.id,
+      clientKey: partial.clientKey || `choice-${this.nextChoiceKey++}`,
+      choiceText: String(partial.choiceText ?? ''),
+      imageUrl: partial.imageUrl || '',
+      hasImage: Boolean(partial.hasImage ?? partial.imageUrl),
+      isCorrect: Boolean(partial.isCorrect),
+      order: Number(partial.order ?? 1)
+    };
+  }
 }
-
-

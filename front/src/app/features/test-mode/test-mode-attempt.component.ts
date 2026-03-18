@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TestModeService } from '../../core/services/test-mode.service';
 import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
+import { environment } from '../../../environments/environment';
 
 @Component({
   standalone: true,
@@ -86,18 +87,34 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
 
                 <div class="question-text rich-text-content" [innerHTML]="questionData.question.text | safeRichText"></div>
 
+                @if (questionData.question.imageUrl) {
+                  <img class="question-inline-image" [src]="questionData.question.imageUrl" alt="Question illustration" />
+                }
 
                 @if (questionData.question.type !== 3) {
+                  @if (isMultipleChoiceQuestion()) {
+                    <div class="saved-hint editing-hint">
+                      Multiple choice: select every correct answer before moving on.
+                    </div>
+                  }
+
                   <div class="choices-grid">
                     @for (choice of questionData.question.choices; track choice.id; let idx = $index) {
                       <button
                         type="button"
                         class="choice-card"
-                        [class.choice-card-selected]="selectedChoiceId === choice.id"
+                        [class.choice-card-selected]="isChoiceSelected(choice.id)"
                         [disabled]="isSubmitting || isFinishing"
                         (click)="selectChoice(choice.id)">
                         <span class="choice-badge">{{ choiceLabel(idx) }}</span>
-                        <span>{{ choice.choiceText }}</span>
+                        <span class="choice-card-content">
+                          @if (choice.choiceText) {
+                            <span>{{ choice.choiceText }}</span>
+                          }
+                          @if (choice.imageUrl) {
+                            <img class="choice-card-image" [src]="choice.imageUrl" [alt]="'Choice ' + choiceLabel(idx)" />
+                          }
+                        </span>
                       </button>
                     }
                   </div>
@@ -222,6 +239,13 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
                       <span>Correct answer</span>
                       <strong>{{ item.correctAnswerText || 'No answer key recorded' }}</strong>
                     </div>
+
+                    @if (item.explanation) {
+                      <div class="review-answer review-answer-correct">
+                        <span>Explanation</span>
+                        <strong>{{ item.explanation }}</strong>
+                      </div>
+                    }
                   </article>
                 }
               </div>
@@ -393,6 +417,14 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       line-height: 1.8;
     }
 
+    .question-inline-image {
+      width: min(320px, 100%);
+      margin-top: 14px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+    }
+
     .saved-hint {
       margin-top: 12px;
       padding: 12px 14px;
@@ -425,7 +457,7 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       border-radius: 14px;
       justify-content: flex-start;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 10px;
       text-align: left;
       background: var(--secondary-gradient);
@@ -464,6 +496,19 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       background: var(--ring-strong);
       color: #ffffff;
       border-color: var(--input-focus-border);
+    }
+
+    .choice-card-content {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .choice-card-image {
+      width: min(220px, 100%);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.08);
     }
 
     .answer-field {
@@ -636,10 +681,10 @@ export class TestModeAttemptComponent implements OnInit {
   isSubmitting = false;
   isFinishing = false;
   currentQuestionIndex = 0;
-  selectedChoiceId?: number;
+  selectedChoiceIds: number[] = [];
   textAnswer = '';
   private questionsCache: any[] = [];
-  private draftChoices = new Map<number, number | undefined>();
+  private draftChoices = new Map<number, number[]>();
   private draftTexts = new Map<number, string>();
 
   constructor(private route: ActivatedRoute, private service: TestModeService, private router: Router) {}
@@ -722,8 +767,14 @@ export class TestModeAttemptComponent implements OnInit {
     }
 
     const questionId = Number(this.questionData.question.id);
-    this.selectedChoiceId = choiceId;
-    this.persistChoiceDraft(questionId, choiceId);
+    if (this.isMultipleChoiceQuestion()) {
+      this.selectedChoiceIds = this.selectedChoiceIds.includes(choiceId)
+        ? this.selectedChoiceIds.filter((id) => id !== choiceId)
+        : [...this.selectedChoiceIds, choiceId];
+    } else {
+      this.selectedChoiceIds = [choiceId];
+    }
+    this.persistChoiceDraft(questionId, this.selectedChoiceIds);
     this.error = '';
   }
 
@@ -748,7 +799,7 @@ export class TestModeAttemptComponent implements OnInit {
 
   isQuestionAnswered(questionId: number): boolean {
     if (this.draftChoices.has(questionId)) {
-      return !!this.draftChoices.get(questionId);
+      return (this.draftChoices.get(questionId) || []).length > 0;
     }
 
     if (this.draftTexts.has(questionId)) {
@@ -823,7 +874,21 @@ export class TestModeAttemptComponent implements OnInit {
     this.service.questions(this.attemptId).subscribe({
       next: (res) => {
         this.loadingQuestion = false;
-        this.questionsCache = Array.isArray(res) ? res : [];
+        this.questionsCache = (Array.isArray(res) ? res : []).map((item: any) => ({
+          ...item,
+          question: item?.question
+            ? {
+                ...item.question,
+                imageUrl: this.resolveAssetUrl(item.question.imageUrl ?? item.question.ImageUrl ?? ''),
+                choices: Array.isArray(item.question?.choices ?? item.question?.Choices)
+                  ? (item.question?.choices ?? item.question?.Choices).map((choice: any) => ({
+                      ...choice,
+                      imageUrl: this.resolveAssetUrl(choice?.imageUrl ?? choice?.ImageUrl ?? '')
+                    }))
+                  : []
+              }
+            : item?.question
+        }));
 
         if (!this.questionsCache.length) {
           this.questionData = null;
@@ -921,7 +986,7 @@ export class TestModeAttemptComponent implements OnInit {
 
   private restoreEditorState(): void {
     if (!this.questionData?.question) {
-      this.selectedChoiceId = undefined;
+      this.selectedChoiceIds = [];
       this.textAnswer = '';
       return;
     }
@@ -931,14 +996,18 @@ export class TestModeAttemptComponent implements OnInit {
       this.textAnswer = this.draftTexts.has(questionId)
         ? String(this.draftTexts.get(questionId) ?? '')
         : String(this.questionData.textAnswer ?? '');
-      this.selectedChoiceId = undefined;
+      this.selectedChoiceIds = [];
       return;
     }
 
-    const draftChoice = this.draftChoices.get(questionId);
-    this.selectedChoiceId = draftChoice !== undefined
-      ? draftChoice
-      : (Number(this.questionData.selectedChoiceId ?? 0) || undefined);
+    const draftChoices = this.draftChoices.get(questionId);
+    const questionSelections = Array.isArray(this.questionData.selectedChoiceIds)
+      ? this.questionData.selectedChoiceIds.map((value: any) => Number(value)).filter((value: number) => value > 0)
+      : [];
+    const fallbackChoice = Number(this.questionData.selectedChoiceId ?? 0);
+    this.selectedChoiceIds = draftChoices !== undefined
+      ? [...draftChoices]
+      : (questionSelections.length ? questionSelections : (fallbackChoice > 0 ? [fallbackChoice] : []));
     this.textAnswer = '';
   }
 
@@ -950,16 +1019,17 @@ export class TestModeAttemptComponent implements OnInit {
     const questionId = Number(this.questionData.question.id);
     if (Number(this.questionData.question.type) === 3) {
       this.persistTextDraft(questionId, this.textAnswer);
-      this.selectedChoiceId = undefined;
+      this.selectedChoiceIds = [];
       return;
     }
 
-    this.persistChoiceDraft(questionId, this.selectedChoiceId);
+    this.persistChoiceDraft(questionId, this.selectedChoiceIds);
   }
 
-  private persistChoiceDraft(questionId: number, choiceId?: number): void {
-    if (choiceId && choiceId > 0) {
-      this.draftChoices.set(questionId, choiceId);
+  private persistChoiceDraft(questionId: number, choiceIds: number[]): void {
+    const normalized = (choiceIds || []).map((value) => Number(value)).filter((value) => value > 0);
+    if (normalized.length) {
+      this.draftChoices.set(questionId, Array.from(new Set(normalized)));
     } else {
       this.draftChoices.delete(questionId);
     }
@@ -978,7 +1048,7 @@ export class TestModeAttemptComponent implements OnInit {
     this.draftChoices.delete(questionId);
   }
 
-  private buildFinishPayload(): Array<{ questionId: number; selectedChoiceId: number | null; textAnswer: string | null }> {
+  private buildFinishPayload(): Array<{ questionId: number; selectedChoiceId: number | null; selectedChoiceIds: number[]; textAnswer: string | null }> {
     const questionIds = new Set<number>();
     for (const item of this.overview?.questions ?? []) {
       questionIds.add(Number(item.questionId));
@@ -992,17 +1062,22 @@ export class TestModeAttemptComponent implements OnInit {
       questionIds.add(questionId);
     }
 
-    const answers: Array<{ questionId: number; selectedChoiceId: number | null; textAnswer: string | null }> = [];
+    const answers: Array<{ questionId: number; selectedChoiceId: number | null; selectedChoiceIds: number[]; textAnswer: string | null }> = [];
     for (const questionId of questionIds) {
-      const selectedChoiceId = Number(this.draftChoices.get(questionId) ?? 0);
-      if (selectedChoiceId > 0) {
-        answers.push({ questionId, selectedChoiceId, textAnswer: null });
+      const selectedChoiceIds = [...(this.draftChoices.get(questionId) || [])];
+      if (selectedChoiceIds.length) {
+        answers.push({
+          questionId,
+          selectedChoiceId: selectedChoiceIds.length === 1 ? selectedChoiceIds[0] : null,
+          selectedChoiceIds,
+          textAnswer: null
+        });
         continue;
       }
 
       const textAnswer = String(this.draftTexts.get(questionId) ?? '').trim();
       if (textAnswer) {
-        answers.push({ questionId, selectedChoiceId: null, textAnswer });
+        answers.push({ questionId, selectedChoiceId: null, selectedChoiceIds: [], textAnswer });
       }
     }
 
@@ -1018,7 +1093,24 @@ export class TestModeAttemptComponent implements OnInit {
       return !!this.textAnswer.trim();
     }
 
-    return !!this.selectedChoiceId;
+    return this.selectedChoiceIds.length > 0;
+  }
+
+  isChoiceSelected(choiceId: number): boolean {
+    return this.selectedChoiceIds.includes(Number(choiceId));
+  }
+
+  isMultipleChoiceQuestion(): boolean {
+    return Number(this.questionData?.question?.type) !== 3 && Number(this.questionData?.question?.selectionMode ?? 1) === 2;
+  }
+
+  private resolveAssetUrl(value: any): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+
+    const apiRoot = environment.apiBaseUrl.replace(/\/api\/?$/i, '');
+    return raw.startsWith('/') ? `${apiRoot}${raw}` : `${apiRoot}/${raw}`;
   }
 }
 

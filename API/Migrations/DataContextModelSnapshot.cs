@@ -147,6 +147,36 @@ namespace API.Migrations
                     b.ToTable("AspNetUserRoles", (string)null);
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.Category", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Categories");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.GameParticipant", b =>
                 {
                     b.Property<int>("Id")
@@ -221,6 +251,9 @@ namespace API.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("AccessType")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -235,6 +268,9 @@ namespace API.Migrations
 
                     b.Property<DateTime?>("CurrentQuestionStartedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("DurationMinutes")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
@@ -258,6 +294,12 @@ namespace API.Migrations
 
                     b.Property<int>("QuizId")
                         .HasColumnType("int");
+
+                    b.Property<DateTime?>("ScheduledEndAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ScheduledStartAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("datetime2");
@@ -310,6 +352,9 @@ namespace API.Migrations
                     b.Property<int?>("SelectedChoiceId")
                         .HasColumnType("int");
 
+                    b.Property<string>("SelectedChoiceIdsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TextAnswer")
                         .HasColumnType("nvarchar(max)");
 
@@ -346,10 +391,16 @@ namespace API.Migrations
                     b.Property<string>("Difficulty")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Explanation")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<int>("Points")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SelectionMode")
                         .HasColumnType("int");
 
                     b.Property<string>("Text")
@@ -432,6 +483,9 @@ namespace API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("TotalMarks")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.ToTable("Quizzes");
@@ -508,6 +562,9 @@ namespace API.Migrations
                     b.Property<int?>("SelectedChoiceId")
                         .HasColumnType("int");
 
+                    b.Property<string>("SelectedChoiceIdsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("TextAnswer")
                         .HasColumnType("nvarchar(max)");
 
@@ -520,6 +577,33 @@ namespace API.Migrations
                     b.HasIndex("SelectedChoiceId");
 
                     b.ToTable("QuizAttemptAnswers");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("QuizId", "CategoryId")
+                        .IsUnique();
+
+                    b.ToTable("QuizCategories");
                 });
 
             modelBuilder.Entity("API.Entities.QuizGame.QuizQuestion", b =>
@@ -768,6 +852,25 @@ namespace API.Migrations
                     b.Navigation("SelectedChoice");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.QuizCategory", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.Category", "Category")
+                        .WithMany("QuizCategories")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Entities.QuizGame.Quiz", "Quiz")
+                        .WithMany("QuizCategories")
+                        .HasForeignKey("QuizId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Quiz");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.QuizQuestion", b =>
                 {
                     b.HasOne("API.Entities.QuizGame.Question", "Question")
@@ -833,6 +936,11 @@ namespace API.Migrations
                     b.Navigation("UserRoles");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.Category", b =>
+                {
+                    b.Navigation("QuizCategories");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.GameParticipant", b =>
                 {
                     b.Navigation("Answers");
@@ -854,6 +962,8 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Entities.QuizGame.Quiz", b =>
                 {
+                    b.Navigation("QuizCategories");
+
                     b.Navigation("QuizQuestions");
                 });
 

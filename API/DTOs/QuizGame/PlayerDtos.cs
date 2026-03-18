@@ -32,6 +32,7 @@ public class SubmitPlayerAnswerDto
     public int ParticipantId { get; set; }
     public int QuestionId { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public List<int> SelectedChoiceIds { get; set; } = new();
     public string? TextAnswer { get; set; }
     public long? ResponseTimeMs { get; set; }
 }
@@ -41,7 +42,9 @@ public class PlayerAnswerSubmitResponseDto
     public bool Accepted { get; set; }
     public bool IsCorrect { get; set; }
     public int? SelectedChoiceId { get; set; }
+    public List<int> SelectedChoiceIds { get; set; } = new();
     public int? CorrectChoiceId { get; set; }
+    public List<int> CorrectChoiceIds { get; set; } = new();
     public string? Message { get; set; }
 }
 

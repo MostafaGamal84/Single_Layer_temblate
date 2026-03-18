@@ -39,13 +39,13 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       <div class="table-wrap desktop-table">
         <table>
           <thead>
-            <tr><th>Title</th><th>Type</th><th>Points</th><th>Answer Time</th><th>Actions</th></tr>
+            <tr><th>Title</th><th>Format</th><th>Points</th><th>Answer Time</th><th>Actions</th></tr>
           </thead>
           <tbody>
             @for (q of items; track q.id) {
               <tr>
                 <td>{{ displayTitle(q) }}</td>
-                <td>{{ typeLabel(q.type) }}</td>
+                <td>{{ typeLabel(q) }}</td>
                 <td>{{ displayPoints(q) }}</td>
                 <td>{{ displayAnswerSeconds(q) }}s</td>
                 <td class="row table-actions">
@@ -63,7 +63,7 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
           <article class="mobile-item">
             <div class="mobile-item-head">
               <strong>{{ displayTitle(q) }}</strong>
-              <span class="mobile-pill">{{ typeLabel(q.type) }}</span>
+              <span class="mobile-pill">{{ typeLabel(q) }}</span>
             </div>
 
             <div class="mobile-metrics">
@@ -324,9 +324,13 @@ export class QuestionsListComponent implements OnInit {
     });
   }
 
-  typeLabel(type: number): string {
-    const normalizedType = Number(type);
-    return normalizedType === 1 ? 'MCQ' : normalizedType === 2 ? 'True/False' : 'Short Answer';
+  typeLabel(item: any): string {
+    const normalizedType = Number(item?.type ?? 0);
+    const selectionMode = Number(item?.selectionMode ?? 1);
+
+    if (normalizedType === 3) return 'Short Answer';
+    if (normalizedType === 2) return 'True / False';
+    return selectionMode === 2 ? 'Multiple Choice' : 'Single Choice';
   }
 
   displayTitle(item: any): string {

@@ -66,15 +66,41 @@ export class QuestionService {
       title: String(item?.title ?? item?.Title ?? item?.questionTitle ?? item?.QuestionTitle ?? ''),
       text: String(item?.text ?? item?.Text ?? ''),
       type: Number(item?.type ?? item?.Type ?? 0),
+      selectionMode: Number(item?.selectionMode ?? item?.SelectionMode ?? 1),
       difficulty: item?.difficulty ?? item?.Difficulty ?? undefined,
+      imageUrl: this.resolveAssetUrl(item?.imageUrl ?? item?.ImageUrl ?? ''),
+      explanation: item?.explanation ?? item?.Explanation ?? undefined,
       points: Number(item?.points ?? item?.Points ?? item?.pointsOverride ?? item?.PointsOverride ?? 0),
       answerSeconds: Number(item?.answerSeconds ?? item?.AnswerSeconds ?? 30),
       choices: rawChoices.map((c: any, index: number) => ({
         id: Number(c?.id ?? c?.Id ?? 0),
         choiceText: String(c?.choiceText ?? c?.ChoiceText ?? ''),
+        imageUrl: this.resolveAssetUrl(c?.imageUrl ?? c?.ImageUrl ?? ''),
+        hasImage: Boolean(c?.hasImage ?? c?.HasImage ?? false),
         isCorrect: Boolean(c?.isCorrect ?? c?.IsCorrect ?? false),
         order: Number(c?.order ?? c?.Order ?? index + 1)
       }))
     };
+  }
+
+  uploadImage(id: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<any>(`${this.base}/${id}/image`, formData);
+  }
+
+  uploadChoiceImage(questionId: number, choiceId: number, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<any>(`${this.base}/${questionId}/choices/${choiceId}/image`, formData);
+  }
+
+  private resolveAssetUrl(value: any): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+
+    const apiRoot = environment.apiBaseUrl.replace(/\/api\/?$/i, '');
+    return raw.startsWith('/') ? `${apiRoot}${raw}` : `${apiRoot}/${raw}`;
   }
 }

@@ -12,7 +12,7 @@ public class QuizService : IQuizService
 {
     private readonly DataContext _context;
     private readonly IWebHostEnvironment _environment;
-    private static readonly HashSet<string> AllowedCoverExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".webp"
     };
@@ -26,18 +26,16 @@ public class QuizService : IQuizService
 
     public async Task<QuizResponseDto> CreateAsync(QuizCreateUpdateDto dto, int? userId)
     {
-        if (string.IsNullOrWhiteSpace(dto.Title))
-        {
-            throw new ArgumentException("Quiz title is required.");
-        }
+        ValidateQuiz(dto);
 
         var quiz = new Quiz
         {
             Title = dto.Title.Trim(),
             Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
             Mode = dto.Mode,
-            DurationMinutes = dto.DurationMinutes,
-            IsPublished = false,
+            DurationMinutes = NormalizeDurationMinutes(dto.DurationMinutes),
+            TotalMarks = NormalizeTotalMarks(dto.TotalMarks),
+            IsPublished = dto.IsPublished,
             CreatedBy = userId,
             CreatedAt = DateTime.UtcNow,
             IsDeleted = false
@@ -46,11 +44,16 @@ public class QuizService : IQuizService
         _context.Set<Quiz>().Add(quiz);
         await _context.SaveChangesAsync();
 
+        await SyncCategoriesAsync(quiz.Id, dto.Categories);
+        await _context.SaveChangesAsync();
+
         return await GetByIdAsync(quiz.Id) ?? throw new InvalidOperationException("Quiz was not created.");
     }
 
     public async Task<QuizResponseDto?> UpdateAsync(int id, QuizCreateUpdateDto dto)
     {
+        ValidateQuiz(dto);
+
         var quiz = await _context.Set<Quiz>()
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
@@ -62,9 +65,13 @@ public class QuizService : IQuizService
         quiz.Title = dto.Title.Trim();
         quiz.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
         quiz.Mode = dto.Mode;
-        quiz.DurationMinutes = dto.DurationMinutes;
+        quiz.DurationMinutes = NormalizeDurationMinutes(dto.DurationMinutes);
+        quiz.TotalMarks = NormalizeTotalMarks(dto.TotalMarks);
+        quiz.IsPublished = dto.IsPublished;
 
+        await SyncCategoriesAsync(id, dto.Categories);
         await _context.SaveChangesAsync();
+
         return await GetByIdAsync(id);
     }
 
@@ -85,40 +92,14 @@ public class QuizService : IQuizService
     {
         var quiz = await _context.Set<Quiz>()
             .AsNoTracking()
-            .Include(x => x.QuizQuestions.OrderBy(q => q.Order))
+            .Include(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
+            .Include(x => x.QuizQuestions.Where(q => !q.IsDeleted).OrderBy(q => q.Order))
             .ThenInclude(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
 
-        if (quiz is null)
-        {
-            return null;
-        }
-
-        return new QuizResponseDto
-        {
-            Id = quiz.Id,
-            Title = quiz.Title,
-            Description = quiz.Description,
-            CoverImageUrl = GetCoverImageUrl(quiz.Id),
-            Mode = quiz.Mode,
-            DurationMinutes = quiz.DurationMinutes,
-            IsPublished = quiz.IsPublished,
-            CreatedBy = quiz.CreatedBy,
-            CreatedAt = quiz.CreatedAt,
-            QuestionsCount = quiz.QuizQuestions.Count,
-            Questions = quiz.QuizQuestions
-                .Where(x => !x.IsDeleted)
-                .OrderBy(x => x.Order)
-                .Select(x => new QuizQuestionResponseDto
-                {
-                    Id = x.Id,
-                    QuestionId = x.QuestionId,
-                    QuestionTitle = x.Question.Title,
-                    Order = x.Order,
-                    PointsOverride = x.PointsOverride,
-                    AnswerSeconds = x.AnswerSeconds
-                }).ToList()
-        };
+        return quiz is null ? null : MapQuizDetails(quiz);
     }
 
     public async Task<PagedResultDto<QuizResponseDto>> GetAllAsync(QuizQueryDto query)
@@ -128,13 +109,18 @@ public class QuizService : IQuizService
 
         var dbQuery = _context.Set<Quiz>()
             .AsNoTracking()
-            .Include(x => x.QuizQuestions)
+            .Include(x => x.QuizQuestions.Where(q => !q.IsDeleted))
+            .ThenInclude(x => x.Question)
+            .Include(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
             .Where(x => !x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim().ToLower();
-            dbQuery = dbQuery.Where(x => x.Title.ToLower().Contains(search) || (x.Description != null && x.Description.ToLower().Contains(search)));
+            dbQuery = dbQuery.Where(x =>
+                x.Title.ToLower().Contains(search) ||
+                (x.Description != null && x.Description.ToLower().Contains(search)));
         }
 
         if (query.Mode.HasValue)
@@ -145,6 +131,12 @@ public class QuizService : IQuizService
         if (query.IsPublished.HasValue)
         {
             dbQuery = dbQuery.Where(x => x.IsPublished == query.IsPublished.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Category))
+        {
+            var category = query.Category.Trim().ToLower();
+            dbQuery = dbQuery.Where(x => x.QuizCategories.Any(qc => !qc.IsDeleted && qc.Category.Name.ToLower().Contains(category)));
         }
 
         var total = await dbQuery.CountAsync();
@@ -159,20 +151,22 @@ public class QuizService : IQuizService
             PageNumber = page,
             PageSize = size,
             TotalCount = total,
-            Items = items.Select(x => new QuizResponseDto
+            Items = items.Select(MapQuizSummary).ToList()
+        };
+    }
+
+    public async Task<List<QuizCategoryDto>> GetCategoriesAsync()
+    {
+        return await _context.Set<Category>()
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.Name)
+            .Select(x => new QuizCategoryDto
             {
                 Id = x.Id,
-                Title = x.Title,
-                Description = x.Description,
-                CoverImageUrl = GetCoverImageUrl(x.Id),
-                Mode = x.Mode,
-                DurationMinutes = x.DurationMinutes,
-                IsPublished = x.IsPublished,
-                CreatedBy = x.CreatedBy,
-                CreatedAt = x.CreatedAt,
-                QuestionsCount = x.QuizQuestions.Count(q => !q.IsDeleted)
-            }).ToList()
-        };
+                Name = x.Name
+            })
+            .ToListAsync();
     }
 
     public async Task<string?> UploadCoverImageAsync(int quizId, IFormFile file)
@@ -186,25 +180,12 @@ public class QuizService : IQuizService
             return null;
         }
 
-        if (file.Length <= 0)
-        {
-            throw new ArgumentException("Image file is empty.");
-        }
+        ValidateImageFile(file);
 
-        if (file.Length > MaxCoverSizeBytes)
-        {
-            throw new ArgumentException("Image size must be 5 MB or less.");
-        }
+        var uploadsDirectory = EnsureImageDirectory("quizzes");
+        DeleteExistingImages(quizId, uploadsDirectory, "quiz");
 
-        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(extension) || !AllowedCoverExtensions.Contains(extension))
-        {
-            throw new ArgumentException("Only JPG, JPEG, PNG, or WEBP images are allowed.");
-        }
-
-        var uploadsDirectory = EnsureQuizCoverDirectory();
-        DeleteExistingCoverImages(quizId, uploadsDirectory);
-
+        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant() ?? ".png";
         var fileName = $"quiz-{quizId}{extension}";
         var fullPath = Path.Combine(uploadsDirectory, fileName);
 
@@ -238,7 +219,7 @@ public class QuizService : IQuizService
                 throw new ArgumentException($"Question {item.QuestionId} does not exist.");
             }
 
-            var current = quiz.QuizQuestions.FirstOrDefault(x => x.QuestionId == item.QuestionId && !x.IsDeleted);
+            var current = quiz.QuizQuestions.FirstOrDefault(x => x.QuestionId == item.QuestionId);
             var effectiveAnswerSeconds = NormalizeAnswerSeconds(item.AnswerSeconds ?? question.AnswerSeconds);
             if (current is null)
             {
@@ -247,17 +228,33 @@ public class QuizService : IQuizService
                     QuestionId = item.QuestionId,
                     Order = item.Order,
                     PointsOverride = item.PointsOverride,
-                    AnswerSeconds = effectiveAnswerSeconds
+                    AnswerSeconds = effectiveAnswerSeconds,
+                    IsDeleted = false
                 });
+                continue;
             }
-            else
-            {
-                current.Order = item.Order;
-                current.PointsOverride = item.PointsOverride;
-                current.AnswerSeconds = effectiveAnswerSeconds;
-            }
+
+            current.IsDeleted = false;
+            current.Order = item.Order;
+            current.PointsOverride = item.PointsOverride;
+            current.AnswerSeconds = effectiveAnswerSeconds;
         }
 
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RemoveQuestionAsync(int quizId, int quizQuestionId)
+    {
+        var quizQuestion = await _context.Set<QuizQuestion>()
+            .FirstOrDefaultAsync(x => x.Id == quizQuestionId && x.QuizId == quizId && !x.IsDeleted);
+
+        if (quizQuestion is null)
+        {
+            return false;
+        }
+
+        quizQuestion.IsDeleted = true;
         await _context.SaveChangesAsync();
         return true;
     }
@@ -276,13 +273,15 @@ public class QuizService : IQuizService
         foreach (var item in items)
         {
             var match = quizQuestions.FirstOrDefault(x => x.Id == item.QuizQuestionId);
-            if (match is not null)
+            if (match is null)
             {
-                match.Order = item.Order;
-                if (item.AnswerSeconds.HasValue)
-                {
-                    match.AnswerSeconds = NormalizeAnswerSeconds(item.AnswerSeconds);
-                }
+                continue;
+            }
+
+            match.Order = item.Order;
+            if (item.AnswerSeconds.HasValue)
+            {
+                match.AnswerSeconds = NormalizeAnswerSeconds(item.AnswerSeconds);
             }
         }
 
@@ -303,6 +302,227 @@ public class QuizService : IQuizService
         return true;
     }
 
+    private QuizResponseDto MapQuizDetails(Quiz quiz)
+    {
+        return new QuizResponseDto
+        {
+            Id = quiz.Id,
+            Title = quiz.Title,
+            Description = quiz.Description,
+            CoverImageUrl = GetImageUrl(quiz.Id, "quizzes", "quiz"),
+            Mode = quiz.Mode,
+            DurationMinutes = quiz.DurationMinutes,
+            TotalMarks = quiz.TotalMarks,
+            EffectiveTotalMarks = ComputeEffectiveTotalMarks(quiz),
+            IsPublished = quiz.IsPublished,
+            CreatedBy = quiz.CreatedBy,
+            CreatedAt = quiz.CreatedAt,
+            QuestionsCount = quiz.QuizQuestions.Count(x => !x.IsDeleted),
+            Categories = MapCategories(quiz),
+            Questions = quiz.QuizQuestions
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.Order)
+                .Select(x => new QuizQuestionResponseDto
+                {
+                    Id = x.Id,
+                    QuestionId = x.QuestionId,
+                    QuestionTitle = x.Question.Title,
+                    Order = x.Order,
+                    PointsOverride = x.PointsOverride,
+                    AnswerSeconds = x.AnswerSeconds,
+                    Question = MapAdminQuestion(x.Question, x.PointsOverride, x.AnswerSeconds)
+                })
+                .ToList()
+        };
+    }
+
+    private QuizResponseDto MapQuizSummary(Quiz quiz)
+    {
+        return new QuizResponseDto
+        {
+            Id = quiz.Id,
+            Title = quiz.Title,
+            Description = quiz.Description,
+            CoverImageUrl = GetImageUrl(quiz.Id, "quizzes", "quiz"),
+            Mode = quiz.Mode,
+            DurationMinutes = quiz.DurationMinutes,
+            TotalMarks = quiz.TotalMarks,
+            EffectiveTotalMarks = ComputeEffectiveTotalMarks(quiz),
+            IsPublished = quiz.IsPublished,
+            CreatedBy = quiz.CreatedBy,
+            CreatedAt = quiz.CreatedAt,
+            QuestionsCount = quiz.QuizQuestions.Count(q => !q.IsDeleted),
+            Categories = MapCategories(quiz)
+        };
+    }
+
+    private static List<QuizCategoryDto> MapCategories(Quiz quiz)
+    {
+        return quiz.QuizCategories
+            .Where(x => !x.IsDeleted && !x.Category.IsDeleted)
+            .OrderBy(x => x.Category.Name)
+            .Select(x => new QuizCategoryDto
+            {
+                Id = x.CategoryId,
+                Name = x.Category.Name
+            })
+            .ToList();
+    }
+
+    private QuestionResponseDto MapAdminQuestion(Question question, int? pointsOverride = null, int? answerSecondsOverride = null)
+    {
+        return new QuestionResponseDto
+        {
+            Id = question.Id,
+            Title = question.Title,
+            Text = question.Text,
+            Type = question.Type,
+            SelectionMode = question.SelectionMode,
+            Difficulty = question.Difficulty,
+            ImageUrl = GetImageUrl(question.Id, "questions", "question"),
+            Explanation = question.Explanation,
+            Points = pointsOverride ?? question.Points,
+            AnswerSeconds = answerSecondsOverride ?? question.AnswerSeconds,
+            CreatedBy = question.CreatedBy,
+            CreatedAt = question.CreatedAt,
+            Choices = question.Choices
+                .Where(c => !c.IsDeleted)
+                .OrderBy(c => c.Order)
+                .Select(c =>
+                {
+                    var choiceImageUrl = GetImageUrl(c.Id, "question-choices", "choice");
+                    return new QuestionChoiceDto
+                    {
+                        Id = c.Id,
+                        ChoiceText = c.ChoiceText,
+                        ImageUrl = choiceImageUrl,
+                        HasImage = !string.IsNullOrWhiteSpace(choiceImageUrl),
+                        IsCorrect = c.IsCorrect,
+                        Order = c.Order
+                    };
+                })
+                .ToList()
+        };
+    }
+
+    private async Task SyncCategoriesAsync(int quizId, IEnumerable<string>? rawCategories)
+    {
+        var desiredNames = (rawCategories ?? Enumerable.Empty<string>())
+            .Select(x => NormalizeCategoryName(x))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .GroupBy(x => x.NormalizedName)
+            .Select(g => g.First())
+            .ToList();
+
+        var existingLinks = await _context.Set<QuizCategory>()
+            .Include(x => x.Category)
+            .Where(x => x.QuizId == quizId)
+            .ToListAsync();
+
+        var desiredNormalizedNames = desiredNames
+            .Select(x => x.NormalizedName)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var linksToRemove = existingLinks
+            .Where(x => !desiredNormalizedNames.Contains(x.Category.NormalizedName))
+            .ToList();
+
+        if (linksToRemove.Count > 0)
+        {
+            _context.Set<QuizCategory>().RemoveRange(linksToRemove);
+        }
+
+        if (desiredNames.Count == 0)
+        {
+            return;
+        }
+
+        var desiredLookup = desiredNames.ToDictionary(x => x.NormalizedName, x => x.Name, StringComparer.Ordinal);
+        var existingCategories = await _context.Set<Category>()
+            .Where(x => desiredNormalizedNames.Contains(x.NormalizedName))
+            .ToListAsync();
+
+        foreach (var normalizedName in desiredNormalizedNames)
+        {
+            if (existingCategories.Any(x => x.NormalizedName == normalizedName))
+            {
+                continue;
+            }
+
+            var category = new Category
+            {
+                Name = desiredLookup[normalizedName],
+                NormalizedName = normalizedName,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+            existingCategories.Add(category);
+            _context.Set<Category>().Add(category);
+        }
+
+        foreach (var category in existingCategories)
+        {
+            var alreadyLinked = existingLinks.Any(x => x.CategoryId == category.Id);
+            if (alreadyLinked)
+            {
+                continue;
+            }
+
+            _context.Set<QuizCategory>().Add(new QuizCategory
+            {
+                QuizId = quizId,
+                Category = category,
+                IsDeleted = false
+            });
+        }
+    }
+
+    private static (string Name, string NormalizedName) NormalizeCategoryName(string? value)
+    {
+        var trimmed = (value ?? string.Empty).Trim();
+        return (trimmed, trimmed.ToUpperInvariant());
+    }
+
+    private static void ValidateQuiz(QuizCreateUpdateDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Title))
+        {
+            throw new ArgumentException("Quiz title is required.");
+        }
+    }
+
+    private static int NormalizeDurationMinutes(int value)
+    {
+        if (value < 0)
+        {
+            return 0;
+        }
+
+        if (value > 1440)
+        {
+            return 1440;
+        }
+
+        return value;
+    }
+
+    private static int? NormalizeTotalMarks(int? value)
+    {
+        if (!value.HasValue || value.Value <= 0)
+        {
+            return null;
+        }
+
+        return value.Value;
+    }
+
+    private static int ComputeEffectiveTotalMarks(Quiz quiz)
+    {
+        return quiz.QuizQuestions
+            .Where(x => !x.IsDeleted && !x.Question.IsDeleted)
+            .Sum(x => x.PointsOverride ?? x.Question.Points);
+    }
+
     private static int NormalizeAnswerSeconds(int? rawValue)
     {
         var value = rawValue ?? 30;
@@ -311,17 +531,36 @@ public class QuizService : IQuizService
         return value;
     }
 
-    private string GetCoverImageUrl(int quizId)
+    private static void ValidateImageFile(IFormFile file)
     {
-        var uploadsDirectory = GetQuizCoverDirectoryPath();
+        if (file.Length <= 0)
+        {
+            throw new ArgumentException("Image file is empty.");
+        }
+
+        if (file.Length > MaxCoverSizeBytes)
+        {
+            throw new ArgumentException("Image size must be 5 MB or less.");
+        }
+
+        var extension = Path.GetExtension(file.FileName)?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(extension) || !AllowedImageExtensions.Contains(extension))
+        {
+            throw new ArgumentException("Only JPG, JPEG, PNG, or WEBP images are allowed.");
+        }
+    }
+
+    private string GetImageUrl(int entityId, string folderName, string filePrefix)
+    {
+        var uploadsDirectory = GetImageDirectoryPath(folderName);
         if (!Directory.Exists(uploadsDirectory))
         {
             return string.Empty;
         }
 
         var filePath = Directory
-            .EnumerateFiles(uploadsDirectory, $"quiz-{quizId}.*", SearchOption.TopDirectoryOnly)
-            .FirstOrDefault(path => AllowedCoverExtensions.Contains(Path.GetExtension(path)));
+            .EnumerateFiles(uploadsDirectory, $"{filePrefix}-{entityId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault(path => AllowedImageExtensions.Contains(Path.GetExtension(path)));
 
         if (string.IsNullOrWhiteSpace(filePath))
         {
@@ -329,18 +568,18 @@ public class QuizService : IQuizService
         }
 
         var fileName = Path.GetFileName(filePath);
-        var relativePath = $"/uploads/quizzes/{fileName}";
+        var relativePath = $"/uploads/{folderName}/{fileName}";
         return AddVersion(relativePath, File.GetLastWriteTimeUtc(filePath));
     }
 
-    private string EnsureQuizCoverDirectory()
+    private string EnsureImageDirectory(string folderName)
     {
-        var path = GetQuizCoverDirectoryPath();
+        var path = GetImageDirectoryPath(folderName);
         Directory.CreateDirectory(path);
         return path;
     }
 
-    private string GetQuizCoverDirectoryPath()
+    private string GetImageDirectoryPath(string folderName)
     {
         var webRoot = _environment.WebRootPath;
         if (string.IsNullOrWhiteSpace(webRoot))
@@ -348,7 +587,7 @@ public class QuizService : IQuizService
             webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         }
 
-        return Path.Combine(webRoot, "uploads", "quizzes");
+        return Path.Combine(webRoot, "uploads", folderName);
     }
 
     private static string AddVersion(string relativePath, DateTime lastWriteUtc)
@@ -357,12 +596,12 @@ public class QuizService : IQuizService
         return $"{relativePath}?v={version}";
     }
 
-    private static void DeleteExistingCoverImages(int quizId, string uploadsDirectory)
+    private static void DeleteExistingImages(int entityId, string uploadsDirectory, string filePrefix)
     {
-        foreach (var path in Directory.EnumerateFiles(uploadsDirectory, $"quiz-{quizId}.*", SearchOption.TopDirectoryOnly))
+        foreach (var path in Directory.EnumerateFiles(uploadsDirectory, $"{filePrefix}-{entityId}.*", SearchOption.TopDirectoryOnly))
         {
             var extension = Path.GetExtension(path);
-            if (!AllowedCoverExtensions.Contains(extension))
+            if (!AllowedImageExtensions.Contains(extension))
             {
                 continue;
             }

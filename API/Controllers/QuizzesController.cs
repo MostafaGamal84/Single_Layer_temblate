@@ -72,6 +72,13 @@ public class QuizzesController : ControllerBase
     }
 
     [Authorize(Roles = "Admin,Host")]
+    [HttpGet("categories")]
+    public async Task<IActionResult> GetCategories()
+    {
+        return Ok(await _service.GetCategoriesAsync());
+    }
+
+    [Authorize(Roles = "Admin,Host")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -92,6 +99,14 @@ public class QuizzesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpDelete("{id:int}/questions/{quizQuestionId:int}")]
+    public async Task<IActionResult> RemoveQuestion(int id, int quizQuestionId)
+    {
+        var ok = await _service.RemoveQuestionAsync(id, quizQuestionId);
+        return ok ? Ok(new { message = "Quiz question removed" }) : NotFound(new { message = "Quiz question not found" });
     }
 
     [Authorize(Roles = "Admin,Host")]

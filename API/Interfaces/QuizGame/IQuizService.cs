@@ -10,8 +10,10 @@ public interface IQuizService
     Task<bool> DeleteAsync(int id);
     Task<QuizResponseDto?> GetByIdAsync(int id);
     Task<PagedResultDto<QuizResponseDto>> GetAllAsync(QuizQueryDto query);
+    Task<List<QuizCategoryDto>> GetCategoriesAsync();
     Task<string?> UploadCoverImageAsync(int quizId, IFormFile file);
     Task<bool> AddQuestionsAsync(int quizId, List<QuizQuestionAddDto> questions);
+    Task<bool> RemoveQuestionAsync(int quizId, int quizQuestionId);
     Task<bool> ReorderAsync(int quizId, List<QuizQuestionReorderItemDto> items);
     Task<bool> PublishAsync(int quizId, bool isPublished);
 }

@@ -53,6 +53,10 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
               <h2 class="question-title">{{ question.title }}</h2>
               <div class="question-text rich-text-content" [innerHTML]="question.text | safeRichText"></div>
 
+              @if (question.imageUrl) {
+                <img class="question-inline-image" [src]="question.imageUrl" alt="Question illustration" />
+              }
+
               @if (isTimedFlow()) {
                 <div class="timer-track">
                   <div class="timer-fill" [class.timer-fill-danger]="isTimeUp" [style.width.%]="timeProgressPercent()"></div>
@@ -68,20 +72,33 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
               </div>
 
               @if (question.type !== 3) {
+                @if (isMultipleChoiceQuestion()) {
+                  <div class="voice-status">
+                    <span>Select every correct answer, then press submit.</span>
+                  </div>
+                }
+
                 <div class="choices-wrap">
                   @for (c of question.choices; track c.id) {
                     <button
                       type="button"
                       class="choice-pill"
-                      [class.choice-pill-selected]="selectedChoiceId === c.id"
+                      [class.choice-pill-selected]="isChoiceSelected(c.id)"
                       [class.choice-pill-locked]="submitted"
                       [class.choice-pill-correct]="isChoiceCorrect(c.id)"
                       [class.choice-pill-wrong]="isChoiceWrong(c.id)"
-                      [attr.aria-pressed]="selectedChoiceId === c.id"
+                      [attr.aria-pressed]="isChoiceSelected(c.id)"
                       [disabled]="isChoiceLocked()"
                       (click)="selectChoice(c.id)">
-                      <span class="choice-icon">{{ selectedChoiceId === c.id ? 'OK' : 'O' }}</span>
-                      <span class="choice-text">{{ c.choiceText }}</span>
+                      <span class="choice-icon">{{ isChoiceSelected(c.id) ? 'OK' : 'O' }}</span>
+                      <span class="choice-body">
+                        @if (c.choiceText) {
+                          <span class="choice-text">{{ c.choiceText }}</span>
+                        }
+                        @if (c.imageUrl) {
+                          <img class="choice-image" [src]="c.imageUrl" alt="Answer option" />
+                        }
+                      </span>
                     </button>
                   }
                 </div>
@@ -95,7 +112,7 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
               }
 
               <div class="action-row" [class.action-row-choice]="question.type !== 3">
-                @if (question.type === 3) {
+                @if (needsSubmitButton()) {
                   <button class="submit-btn" [disabled]="submitted || isPaused || isTimeUp || isSessionEnded || isSubmittingAnswer" (click)="submit()">
                     {{ submitted ? 'Submitted' : (isSubmittingAnswer ? 'Submitting...' : 'Submit Answer') }}
                   </button>
@@ -103,6 +120,12 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
                 <button class="action-btn" (click)="refreshLeaderboard()">Refresh</button>
                 <button class="action-btn" [disabled]="isSessionEnded || isLeaving" (click)="leaveSession()">Leave</button>
               </div>
+
+              @if ((submitted || isRevealPhase) && question.explanation) {
+                <div class="voice-status voice-status-live">
+                  <span>{{ question.explanation }}</span>
+                </div>
+              }
             } @else {
               <div class="empty-state">Waiting for next question...</div>
             }
@@ -286,6 +309,13 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       line-height: 1.55;
     }
 
+    .question-inline-image {
+      width: min(320px, 100%);
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
     .timer-track {
       margin-top: 2px;
       height: 9px;
@@ -414,6 +444,20 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       line-height: 1.4;
       word-break: break-word;
       min-width: 0;
+    }
+
+    .choice-body {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .choice-image {
+      width: min(220px, 100%);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
     }
 
     .action-row {
@@ -566,14 +610,14 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
   timerDashOffset = 2 * Math.PI * 30;
   readonly timerCircumference = 2 * Math.PI * 30;
   question: any;
-  selectedChoiceId?: number;
+  selectedChoiceIds: number[] = [];
   textAnswer = '';
   activeTab: 'interactions' | 'leaderboard' = 'interactions';
   submitted = false;
   isSubmittingAnswer = false;
   isRevealPhase = false;
   submittedIsCorrect: boolean | null = null;
-  correctChoiceId?: number;
+  correctChoiceIds: number[] = [];
   isPaused = false;
   isSessionEnded = false;
   isHostVoiceLive = false;
@@ -734,7 +778,7 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (Number(this.question?.type) !== 3 && !this.selectedChoiceId) {
+    if (Number(this.question?.type) !== 3 && this.selectedChoiceIds.length === 0) {
       this.error = 'Choose an option first.';
       return;
     }
@@ -749,7 +793,8 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
     this.playerService.submitAnswer(this.sessionId, {
       participantId: this.participantId,
       questionId: this.question.id,
-      selectedChoiceId: this.selectedChoiceId,
+      selectedChoiceId: this.selectedChoiceIds.length === 1 ? this.selectedChoiceIds[0] : null,
+      selectedChoiceIds: this.selectedChoiceIds,
       textAnswer: this.textAnswer,
       responseTimeMs
     }).subscribe({
@@ -765,8 +810,13 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
         this.submitted = true;
         const isCorrect = Boolean(res?.isCorrect ?? res?.IsCorrect ?? false);
         this.submittedIsCorrect = isCorrect;
-        const correctChoiceId = Number(res?.correctChoiceId ?? res?.CorrectChoiceId ?? 0);
-        this.correctChoiceId = correctChoiceId > 0 ? correctChoiceId : undefined;
+        const correctChoiceIds = Array.isArray(res?.correctChoiceIds ?? res?.CorrectChoiceIds)
+          ? (res?.correctChoiceIds ?? res?.CorrectChoiceIds).map((value: any) => Number(value)).filter((value: number) => value > 0)
+          : [];
+        const fallbackCorrectId = Number(res?.correctChoiceId ?? res?.CorrectChoiceId ?? 0);
+        this.correctChoiceIds = correctChoiceIds.length
+          ? correctChoiceIds
+          : (fallbackCorrectId > 0 ? [fallbackCorrectId] : []);
         this.message = Number(this.question?.type) === 3 ? 'Answer submitted' : 'Choice locked';
         this.refreshLeaderboard();
         this.cdr.detectChanges();
@@ -784,10 +834,18 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.selectedChoiceId = choiceId;
+    if (this.isMultipleChoiceQuestion()) {
+      this.selectedChoiceIds = this.selectedChoiceIds.includes(choiceId)
+        ? this.selectedChoiceIds.filter((id) => id !== choiceId)
+        : [...this.selectedChoiceIds, choiceId];
+    } else {
+      this.selectedChoiceIds = [choiceId];
+    }
     this.message = '';
     this.error = '';
-    this.submit();
+    if (!this.isMultipleChoiceQuestion()) {
+      this.submit();
+    }
   }
 
   isChoiceLocked(): boolean {
@@ -795,14 +853,13 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
   }
 
   isChoiceCorrect(choiceId: number): boolean {
-    return this.isRevealPhase && Number(this.correctChoiceId ?? 0) > 0 && Number(this.correctChoiceId) === Number(choiceId);
+    return this.isRevealPhase && this.correctChoiceIds.includes(Number(choiceId));
   }
 
   isChoiceWrong(choiceId: number): boolean {
     return this.isRevealPhase
-      && Number(this.selectedChoiceId ?? 0) > 0
-      && Number(this.selectedChoiceId) === Number(choiceId)
-      && Number(this.correctChoiceId ?? 0) !== Number(choiceId);
+      && this.selectedChoiceIds.includes(Number(choiceId))
+      && !this.correctChoiceIds.includes(Number(choiceId));
   }
 
   setTab(tab: 'interactions' | 'leaderboard'): void {
@@ -958,7 +1015,16 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
         this.questionStartedAtMs = Date.now();
         this.isTimeUp = false;
       }
-      this.question = currentQuestion;
+      this.question = {
+        ...currentQuestion,
+        imageUrl: this.resolveAssetUrl(currentQuestion?.imageUrl ?? currentQuestion?.ImageUrl ?? ''),
+        choices: Array.isArray(currentQuestion?.choices ?? currentQuestion?.Choices)
+          ? (currentQuestion?.choices ?? currentQuestion?.Choices).map((choice: any) => ({
+              ...choice,
+              imageUrl: this.resolveAssetUrl(choice?.imageUrl ?? choice?.ImageUrl ?? '')
+            }))
+          : []
+      };
       const fromQuestion = Number(currentQuestion?.answerSeconds ?? currentQuestion?.AnswerSeconds ?? 0);
       this.questionDurationSeconds = this.normalizeDurationSeconds(durationFromState || fromQuestion || this.questionDurationSeconds);
       this.error = '';
@@ -1065,7 +1131,7 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    return Number(this.correctChoiceId ?? 0) > 0;
+    return this.correctChoiceIds.length > 0;
   }
 
   private flushPendingNextQuestion(): void {
@@ -1095,10 +1161,22 @@ export class PlayerLiveQuestionComponent implements OnInit, OnDestroy {
     this.isSubmittingAnswer = false;
     this.isRevealPhase = false;
     this.submittedIsCorrect = null;
-    this.correctChoiceId = undefined;
-    this.selectedChoiceId = undefined;
+    this.correctChoiceIds = [];
+    this.selectedChoiceIds = [];
     this.textAnswer = '';
     this.timeUpHandledForQuestion = false;
+  }
+
+  isChoiceSelected(choiceId: number): boolean {
+    return this.selectedChoiceIds.includes(Number(choiceId));
+  }
+
+  isMultipleChoiceQuestion(): boolean {
+    return Number(this.question?.type) !== 3 && Number(this.question?.selectionMode ?? 1) === 2;
+  }
+
+  needsSubmitButton(): boolean {
+    return Number(this.question?.type) === 3 || this.isMultipleChoiceQuestion();
   }
 
   private startQuestionTimer(endsAtUtc: string | null): void {

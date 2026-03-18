@@ -46,7 +46,9 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
           <div class="card" style="min-width:min(260px,100%);">
             <h3>Live State</h3>
             <p>Status: {{ statusLabel(state?.status || session.status) }}</p>
+            <p>Access: {{ accessLabel(session?.accessType) }}</p>
             <p>Flow: {{ flowModeLabel(state?.questionFlowMode ?? session.questionFlowMode) }}</p>
+            <p>Schedule: {{ scheduleLabel(session) }}</p>
             <p>Host Voice: <b>{{ isVoiceBroadcasting ? 'Live' : 'Off' }}</b></p>
             @if (voiceStatus) {
               <p class="text-success" style="margin:4px 0 0;">{{ voiceStatus }}</p>
@@ -84,7 +86,9 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
             }
 
             <h4 style="margin:14px 0 6px;">Pending Join Requests</h4>
-            @if (pendingRequests.length) {
+            @if ((session?.accessType ?? 2) === 1) {
+              <p style="margin:0;">Public session. Participants are approved automatically.</p>
+            } @else if (pendingRequests.length) {
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -728,7 +732,7 @@ export class GameSessionControlComponent implements OnInit, OnDestroy {
   }
 
   canStart(): boolean {
-    return !this.actionLoading && !this.deleting && this.getCurrentStatus() === 2;
+    return !this.actionLoading && !this.deleting && [1, 2].includes(this.getCurrentStatus());
   }
 
   canPause(): boolean {
@@ -769,6 +773,29 @@ export class GameSessionControlComponent implements OnInit, OnDestroy {
 
   flowModeLabel(v: any): string {
     return Number(v) === 2 ? 'Timed by question' : 'Host controlled';
+  }
+
+  accessLabel(v: any): string {
+    return Number(v) === 1 ? 'Public' : 'Private';
+  }
+
+  scheduleLabel(session: any): string {
+    const start = session?.scheduledStartAt ? new Date(session.scheduledStartAt) : null;
+    const end = session?.scheduledEndAt ? new Date(session.scheduledEndAt) : null;
+
+    if (start && end) {
+      return `${start.toLocaleString()} to ${end.toLocaleString()}`;
+    }
+
+    if (start) {
+      return `Starts ${start.toLocaleString()}`;
+    }
+
+    if (session?.durationMinutes) {
+      return `${session.durationMinutes} min`;
+    }
+
+    return 'On demand';
   }
 }
 

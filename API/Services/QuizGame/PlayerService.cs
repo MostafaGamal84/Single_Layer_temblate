@@ -5,6 +5,7 @@ using API.Interfaces.QuizGame;
 using API.SignalR;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace API.Services.QuizGame;
 
@@ -43,6 +44,7 @@ public class PlayerService : IPlayerService
             return null;
         }
 
+        var requiresApproval = session.AccessType == SessionAccessType.Private;
         var normalizedName = dto.DisplayName.Trim();
         var existingParticipant = await _context.Set<GameParticipant>()
             .FirstOrDefaultAsync(x =>
@@ -64,16 +66,17 @@ public class PlayerService : IPlayerService
             participant = existingParticipant;
             participant.IsDeleted = false;
             participant.UserId = userId;
-            participant.JoinStatus = ParticipantJoinStatus.Pending;
+            participant.JoinStatus = requiresApproval ? ParticipantJoinStatus.Pending : ParticipantJoinStatus.Approved;
             participant.RequestedAt = DateTime.UtcNow;
-            participant.ApprovedAt = null;
+            participant.ApprovedAt = requiresApproval ? null : DateTime.UtcNow;
             participant.RejectedAt = null;
             participant.LeftAt = null;
             participant.DecisionByHostId = null;
             participant.DecisionNote = null;
-            participant.IsConnected = false;
+            participant.IsConnected = !requiresApproval;
             participant.ParticipantToken = Guid.NewGuid().ToString("N");
             participant.Rank = null;
+            participant.JoinedAt = !requiresApproval ? DateTime.UtcNow : participant.JoinedAt;
         }
         else
         {
@@ -82,9 +85,11 @@ public class PlayerService : IPlayerService
                 GameSessionId = session.Id,
                 DisplayName = normalizedName,
                 UserId = userId,
-                JoinStatus = ParticipantJoinStatus.Pending,
+                JoinStatus = requiresApproval ? ParticipantJoinStatus.Pending : ParticipantJoinStatus.Approved,
                 RequestedAt = DateTime.UtcNow,
-                IsConnected = false,
+                ApprovedAt = requiresApproval ? null : DateTime.UtcNow,
+                JoinedAt = !requiresApproval ? DateTime.UtcNow : DateTime.UtcNow,
+                IsConnected = !requiresApproval,
                 IsDeleted = false,
                 ParticipantToken = Guid.NewGuid().ToString("N")
             };
@@ -94,13 +99,25 @@ public class PlayerService : IPlayerService
 
         await _context.SaveChangesAsync();
 
-        await _hubContext.Clients.Group(GetGroupName(session.Id)).SendAsync("joinRequestCreated", new
+        if (requiresApproval)
         {
-            sessionId = session.Id,
-            participantId = participant.Id,
-            displayName = participant.DisplayName,
-            requestedAt = participant.RequestedAt
-        });
+            await _hubContext.Clients.Group(GetGroupName(session.Id)).SendAsync("joinRequestCreated", new
+            {
+                sessionId = session.Id,
+                participantId = participant.Id,
+                displayName = participant.DisplayName,
+                requestedAt = participant.RequestedAt
+            });
+        }
+        else
+        {
+            await _hubContext.Clients.Group(GetGroupName(session.Id)).SendAsync("playerJoined", new
+            {
+                sessionId = session.Id,
+                participantId = participant.Id,
+                displayName = participant.DisplayName
+            });
+        }
 
         var waitingRoom = await GetWaitingRoomAsync(session.Id);
         if (waitingRoom is not null)
@@ -117,7 +134,7 @@ public class PlayerService : IPlayerService
             SessionId = session.Id,
             DisplayName = participant.DisplayName,
             JoinStatus = participant.JoinStatus,
-            RequiresApproval = true
+            RequiresApproval = requiresApproval
         };
     }
 
@@ -180,19 +197,28 @@ public class PlayerService : IPlayerService
             Title = qq.Question.Title,
             Text = qq.Question.Text,
             Type = qq.Question.Type,
+            SelectionMode = qq.Question.SelectionMode,
             Difficulty = qq.Question.Difficulty,
+            ImageUrl = GetQuestionImageUrl(qq.Question.Id),
+            Explanation = qq.Question.Explanation,
             Points = qq.PointsOverride ?? qq.Question.Points,
             AnswerSeconds = qq.AnswerSeconds,
             CreatedBy = qq.Question.CreatedBy,
             CreatedAt = qq.Question.CreatedAt,
             Choices = qq.Question.Type == QuestionType.ShortAnswer
                 ? new List<QuestionChoiceDto>()
-                : qq.Question.Choices.OrderBy(c => c.Order).Select(c => new QuestionChoiceDto
+                : qq.Question.Choices.OrderBy(c => c.Order).Select(c =>
                 {
-                    Id = c.Id,
-                    ChoiceText = c.ChoiceText,
-                    IsCorrect = false,
-                    Order = c.Order
+                    var choiceImageUrl = GetChoiceImageUrl(c.Id);
+                    return new QuestionChoiceDto
+                    {
+                        Id = c.Id,
+                        ChoiceText = c.ChoiceText,
+                        ImageUrl = choiceImageUrl,
+                        HasImage = !string.IsNullOrWhiteSpace(choiceImageUrl),
+                        IsCorrect = false,
+                        Order = c.Order
+                    };
                 }).ToList()
         };
     }
@@ -253,19 +279,32 @@ public class PlayerService : IPlayerService
             return Rejected("Question not found.");
         }
 
+        var validationMessage = ValidateSubmission(question, dto);
+        if (!string.IsNullOrWhiteSpace(validationMessage))
+        {
+            return Rejected(validationMessage);
+        }
+
+        var normalizedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
         var isCorrect = EvaluateAnswer(question, dto);
-        var score = isCorrect ? question.Points : 0;
-        var correctChoiceId = question.Type == QuestionType.ShortAnswer
-            ? (int?)null
-            : question.Choices.FirstOrDefault(x => x.IsCorrect)?.Id;
+        var score = isCorrect ? (currentQuestion.PointsOverride ?? question.Points) : 0;
+        var correctChoiceIds = question.Type == QuestionType.ShortAnswer
+            ? new List<int>()
+            : question.Choices
+                .Where(x => x.IsCorrect)
+                .OrderBy(x => x.Order)
+                .Select(x => x.Id)
+                .ToList();
+        var correctChoiceId = correctChoiceIds.Count == 1 ? correctChoiceIds[0] : (int?)null;
 
         var answer = new PlayerAnswer
         {
             GameSessionId = sessionId,
             ParticipantId = dto.ParticipantId,
             QuestionId = dto.QuestionId,
-            SelectedChoiceId = dto.SelectedChoiceId,
-            TextAnswer = dto.TextAnswer,
+            SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null,
+            SelectedChoiceIdsJson = SerializeSelectedChoiceIds(normalizedChoiceIds),
+            TextAnswer = question.Type == QuestionType.ShortAnswer ? dto.TextAnswer?.Trim() : null,
             IsCorrect = isCorrect,
             ScoreAwarded = score,
             ResponseTimeMs = dto.ResponseTimeMs,
@@ -293,8 +332,10 @@ public class PlayerService : IPlayerService
         {
             Accepted = true,
             IsCorrect = isCorrect,
-            SelectedChoiceId = dto.SelectedChoiceId,
+            SelectedChoiceId = normalizedChoiceIds.Count == 1 ? normalizedChoiceIds[0] : null,
+            SelectedChoiceIds = normalizedChoiceIds,
             CorrectChoiceId = correctChoiceId,
+            CorrectChoiceIds = correctChoiceIds,
             Message = "Answer submitted"
         };
     }
@@ -434,12 +475,24 @@ public class PlayerService : IPlayerService
                 && string.Equals(expected.Trim(), dto.TextAnswer.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
-        if (!dto.SelectedChoiceId.HasValue)
+        var selectedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
+        if (selectedChoiceIds.Count == 0)
         {
             return false;
         }
 
-        var choice = question.Choices.FirstOrDefault(x => x.Id == dto.SelectedChoiceId.Value);
+        if (question.SelectionMode == QuestionSelectionMode.Multiple && question.Type == QuestionType.MultipleChoice)
+        {
+            var correctChoiceIds = question.Choices
+                .Where(x => x.IsCorrect)
+                .Select(x => x.Id)
+                .OrderBy(x => x)
+                .ToList();
+
+            return correctChoiceIds.SequenceEqual(selectedChoiceIds.OrderBy(x => x));
+        }
+
+        var choice = question.Choices.FirstOrDefault(x => x.Id == selectedChoiceIds[0]);
         return choice?.IsCorrect == true;
     }
 
@@ -448,6 +501,8 @@ public class PlayerService : IPlayerService
         var session = await _context.Set<GameSession>()
             .AsNoTracking()
             .Include(x => x.Quiz)
+            .ThenInclude(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .ThenInclude(x => x.Category)
             .Include(x => x.Participants)
             .FirstOrDefaultAsync(x => x.Id == sessionId && !x.IsDeleted);
 
@@ -465,12 +520,25 @@ public class PlayerService : IPlayerService
             JoinCode = session.JoinCode,
             JoinLink = session.JoinLink,
             Status = session.Status,
+            AccessType = session.AccessType,
             QuestionFlowMode = session.QuestionFlowMode,
+            ScheduledStartAt = session.ScheduledStartAt,
+            ScheduledEndAt = session.ScheduledEndAt,
+            DurationMinutes = session.DurationMinutes,
             CurrentQuestionIndex = session.CurrentQuestionIndex,
             StartedAt = session.StartedAt,
             EndedAt = session.EndedAt,
             CreatedAt = session.CreatedAt,
-            ParticipantsCount = session.Participants.Count(IsApprovedParticipant)
+            ParticipantsCount = session.Participants.Count(IsApprovedParticipant),
+            Categories = session.Quiz.QuizCategories
+                .Where(x => !x.IsDeleted && !x.Category.IsDeleted)
+                .OrderBy(x => x.Category.Name)
+                .Select(x => new QuizCategoryDto
+                {
+                    Id = x.CategoryId,
+                    Name = x.Category.Name
+                })
+                .ToList()
         };
 
         await _hubContext.Clients.Group(GetGroupName(sessionId)).SendAsync("sessionUpdated", payload);
@@ -489,9 +557,114 @@ public class PlayerService : IPlayerService
             Accepted = false,
             IsCorrect = false,
             SelectedChoiceId = null,
+            SelectedChoiceIds = new List<int>(),
             CorrectChoiceId = null,
+            CorrectChoiceIds = new List<int>(),
             Message = message
         };
+    }
+
+    private static string? ValidateSubmission(Question question, SubmitPlayerAnswerDto dto)
+    {
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            return string.IsNullOrWhiteSpace(dto.TextAnswer) ? "Please write your answer first." : null;
+        }
+
+        var selectedChoiceIds = NormalizeSelectedChoiceIds(question, dto.SelectedChoiceId, dto.SelectedChoiceIds);
+        if (selectedChoiceIds.Count == 0)
+        {
+            return question.SelectionMode == QuestionSelectionMode.Multiple
+                ? "Please select at least one answer first."
+                : "Please select an answer first.";
+        }
+
+        var validChoiceIds = question.Choices.Select(x => x.Id).ToHashSet();
+        return selectedChoiceIds.All(validChoiceIds.Contains)
+            ? null
+            : "Selected answer is invalid for this question.";
+    }
+
+    private static List<int> NormalizeSelectedChoiceIds(Question question, int? selectedChoiceId, List<int>? selectedChoiceIds)
+    {
+        if (question.Type == QuestionType.ShortAnswer)
+        {
+            return new List<int>();
+        }
+
+        var values = (selectedChoiceIds ?? new List<int>())
+            .Where(x => x > 0)
+            .Distinct()
+            .ToList();
+
+        if (selectedChoiceId.HasValue && selectedChoiceId.Value > 0 && !values.Contains(selectedChoiceId.Value))
+        {
+            values.Insert(0, selectedChoiceId.Value);
+        }
+
+        if (question.SelectionMode != QuestionSelectionMode.Multiple || question.Type != QuestionType.MultipleChoice)
+        {
+            var single = values.FirstOrDefault();
+            return single > 0 ? new List<int> { single } : new List<int>();
+        }
+
+        return values;
+    }
+
+    private static string? SerializeSelectedChoiceIds(List<int> selectedChoiceIds)
+    {
+        return selectedChoiceIds.Count == 0 ? null : JsonSerializer.Serialize(selectedChoiceIds);
+    }
+
+    private string GetQuestionImageUrl(int questionId)
+    {
+        var uploadsDirectory = GetUploadsDirectoryPath("questions");
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"question-{questionId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/questions/{fileName}";
+        var version = new DateTimeOffset(File.GetLastWriteTimeUtc(filePath)).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private string GetChoiceImageUrl(int choiceId)
+    {
+        var uploadsDirectory = GetUploadsDirectoryPath("question-choices");
+        if (!Directory.Exists(uploadsDirectory))
+        {
+            return string.Empty;
+        }
+
+        var filePath = Directory
+            .EnumerateFiles(uploadsDirectory, $"choice-{choiceId}.*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return string.Empty;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        var relativePath = $"/uploads/question-choices/{fileName}";
+        var version = new DateTimeOffset(File.GetLastWriteTimeUtc(filePath)).ToUnixTimeSeconds();
+        return $"{relativePath}?v={version}";
+    }
+
+    private static string GetUploadsDirectoryPath(string folderName)
+    {
+        return Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", folderName);
     }
 
     private static string GetGlobalGroupName() => "sessions";

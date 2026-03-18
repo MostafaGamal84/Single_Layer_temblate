@@ -7,7 +7,9 @@ public class Question : BaseEntity
     public string Title { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
     public QuestionType Type { get; set; }
+    public QuestionSelectionMode SelectionMode { get; set; } = QuestionSelectionMode.Single;
     public string? Difficulty { get; set; }
+    public string? Explanation { get; set; }
     public int Points { get; set; }
     public int AnswerSeconds { get; set; } = 30;
     public int? CreatedBy { get; set; }

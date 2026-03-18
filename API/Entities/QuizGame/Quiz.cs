@@ -9,9 +9,11 @@ public class Quiz : BaseEntity
     public QuizMode Mode { get; set; }
     public int DurationMinutes { get; set; }
     public bool IsPublished { get; set; }
+    public int? TotalMarks { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public virtual ICollection<QuizQuestion> QuizQuestions { get; set; } = new List<QuizQuestion>();
+    public virtual ICollection<QuizCategory> QuizCategories { get; set; } = new List<QuizCategory>();
 }
 
 public class QuizQuestion : BaseEntity
@@ -23,4 +25,12 @@ public class QuizQuestion : BaseEntity
     public int AnswerSeconds { get; set; } = 30;
     public virtual Quiz Quiz { get; set; } = null!;
     public virtual Question Question { get; set; } = null!;
+}
+
+public class QuizCategory : BaseEntity
+{
+    public int QuizId { get; set; }
+    public int CategoryId { get; set; }
+    public virtual Quiz Quiz { get; set; } = null!;
+    public virtual Category Category { get; set; } = null!;
 }
