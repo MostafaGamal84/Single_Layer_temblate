@@ -23,13 +23,6 @@ import { AuthService } from '../../core/services/auth.service';
             <span>Focused analytics</span>
             <span>Fast player access</span>
           </div>
-
-          <div class="auth-glass-card">
-            <span class="auth-card-label">Quick access</span>
-            <h3>Quick Test Accounts</h3>
-            <p><strong>Admin:</strong> admin@quiz.local / Admin@12345</p>
-            <p><strong>Host:</strong> host@quiz.local / Host@12345</p>
-          </div>
         </section>
 
         <section class="auth-form-wrap">
