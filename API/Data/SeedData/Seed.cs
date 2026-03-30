@@ -29,7 +29,8 @@ public static class Seed
                 FirstName = "System",
                 LastName = "Admin",
                 RegisterTime = DateTime.UtcNow,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                Status = 1
             };
 
             var host = new AppUser
@@ -39,7 +40,8 @@ public static class Seed
                 FirstName = "Default",
                 LastName = "Host",
                 RegisterTime = DateTime.UtcNow,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                Status = 1
             };
              var player = new AppUser
             {
@@ -48,7 +50,8 @@ public static class Seed
                 FirstName = "Default",
                 LastName = "Player",
                 RegisterTime = DateTime.UtcNow,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                Status = 1
             };
                 var player2 = new AppUser
             {
@@ -57,7 +60,8 @@ public static class Seed
                 FirstName = "Default",
                 LastName = "Player",
                 RegisterTime = DateTime.UtcNow,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                Status = 1
             };
                 var player3 = new AppUser
             {
@@ -66,7 +70,8 @@ public static class Seed
                 FirstName = "Default",
                 LastName = "Player",
                 RegisterTime = DateTime.UtcNow,
-                EmailConfirmed = true
+                EmailConfirmed = true,
+                Status = 1
             };
 
             await userManager.CreateAsync(admin, "Admin@12345");

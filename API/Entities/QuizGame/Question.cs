@@ -14,6 +14,10 @@ public class Question : BaseEntity
     public int AnswerSeconds { get; set; } = 30;
     public int? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public int? CategoryId { get; set; }
+    public int? QuizId { get; set; }
+    public virtual QuestionCategory? Category { get; set; }
+    public virtual Quiz? Quiz { get; set; }
     public virtual ICollection<QuestionChoice> Choices { get; set; } = new List<QuestionChoice>();
     public virtual ICollection<QuizQuestion> QuizQuestions { get; set; } = new List<QuizQuestion>();
 }

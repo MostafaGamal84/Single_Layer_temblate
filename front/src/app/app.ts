@@ -4,10 +4,11 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './core/services/auth.service';
 import { ThemeService } from './core/services/theme.service';
 import { ConfirmDialogComponent } from './shared/confirm-dialog.component';
+import { ToastComponent } from './shared/toast.component';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, ConfirmDialogComponent],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, ConfirmDialogComponent, ToastComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -21,6 +22,7 @@ export class App {
   readonly shellTitle = computed(() => this.theme.isDark() ? 'Midnight Motion' : 'Daylight Motion');
   readonly menuButtonLabel = computed(() => this.mobileSidebarOpen() ? 'Close menu' : 'Open menu');
   readonly menuButtonText = computed(() => this.mobileSidebarOpen() ? 'Close' : 'Menu');
+  readonly showMenu = computed(() => this.auth.isLoggedIn() && this.auth.status() === 1);
 
   toggleTheme(): void {
     this.theme.toggleTheme();

@@ -13,11 +13,13 @@ public class TestModeController : ControllerBase
 {
     private readonly ITestModeService _service;
     private readonly IQuizService _quizService;
+    private readonly IQuizAccessService _quizAccessService;
 
-    public TestModeController(ITestModeService service, IQuizService quizService)
+    public TestModeController(ITestModeService service, IQuizService quizService, IQuizAccessService quizAccessService)
     {
         _service = service;
         _quizService = quizService;
+        _quizAccessService = quizAccessService;
     }
 
     [AllowAnonymous]
@@ -32,60 +34,75 @@ public class TestModeController : ControllerBase
         return Ok(await _quizService.GetAllAsync(query));
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpPost("quizzes/{quizId:int}/start")]
     public async Task<IActionResult> Start(int quizId, [FromBody] StartTestAttemptDto dto)
     {
-        var attempt = await _service.StartAsync(quizId, User.Identity?.IsAuthenticated == true ? User.GetUserId() : null, dto);
-        return attempt is null ? NotFound(new { message = "Quiz not found or not published for test mode" }) : Ok(attempt);
+        var userId = User.GetUserId();
+        
+        var checkResult = await _quizAccessService.CheckAttemptAsync(quizId, userId);
+        
+        if (!checkResult.CanStart)
+        {
+            return BadRequest(new { message = checkResult.BlockReason ?? "You cannot start this exam" });
+        }
+
+        var attempt = await _service.StartAsync(quizId, userId, dto);
+        
+        if (attempt is null)
+        {
+            return NotFound(new { message = "Quiz not found or not published for test mode" });
+        }
+
+        return Ok(attempt);
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpGet("attempts/{attemptId:int}/overview")]
     public async Task<IActionResult> Overview(int attemptId)
     {
-        var overview = await _service.GetAttemptOverviewAsync(attemptId);
+        var overview = await _service.GetAttemptOverviewAsync(attemptId, User.GetUserId(), CanManageAttempts());
         return overview is null ? NotFound(new { message = "Attempt not found" }) : Ok(overview);
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpGet("attempts/{attemptId:int}/questions")]
     public async Task<IActionResult> Questions(int attemptId)
     {
-        return Ok(await _service.GetQuestionsAsync(attemptId));
+        return Ok(await _service.GetQuestionsAsync(attemptId, User.GetUserId(), CanManageAttempts()));
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpGet("attempts/{attemptId:int}/current-question")]
     public async Task<IActionResult> CurrentQuestion(int attemptId, [FromQuery] int? questionIndex)
     {
-        var question = await _service.GetCurrentQuestionAsync(attemptId, questionIndex);
+        var question = await _service.GetCurrentQuestionAsync(attemptId, User.GetUserId(), questionIndex, CanManageAttempts());
         return question is null ? NotFound(new { message = "No active question" }) : Ok(question);
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpPost("attempts/{attemptId:int}/submit-answer")]
     public async Task<IActionResult> SubmitAnswer(int attemptId, [FromBody] SubmitTestAnswerDto dto)
     {
-        var result = await _service.SubmitAnswerAsync(attemptId, dto);
+        var result = await _service.SubmitAnswerAsync(attemptId, User.GetUserId(), dto, CanManageAttempts());
         return result.Accepted
             ? Ok(result)
             : BadRequest(result);
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpPost("attempts/{attemptId:int}/finish")]
     public async Task<IActionResult> Finish(int attemptId, [FromBody] FinishTestAttemptDto? dto)
     {
-        var result = await _service.FinishAsync(attemptId, dto ?? new FinishTestAttemptDto());
+        var result = await _service.FinishAsync(attemptId, User.GetUserId(), dto ?? new FinishTestAttemptDto(), CanManageAttempts());
         return result is null ? NotFound(new { message = "Attempt not found" }) : Ok(result);
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpGet("attempts/{attemptId:int}/result")]
     public async Task<IActionResult> Result(int attemptId)
     {
-        var result = await _service.GetResultAsync(attemptId);
+        var result = await _service.GetResultAsync(attemptId, User.GetUserId(), CanManageAttempts());
         return result is null ? NotFound(new { message = "Attempt not found" }) : Ok(result);
     }
 
@@ -95,6 +112,11 @@ public class TestModeController : ControllerBase
     {
         var userId = User.GetUserId();
         return Ok(await _service.GetMyHistoryAsync(userId));
+    }
+
+    private bool CanManageAttempts()
+    {
+        return User.IsInRole("Admin") || User.IsInRole("Host");
     }
 }
 

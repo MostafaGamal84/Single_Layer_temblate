@@ -115,4 +115,31 @@ public class QuestionsController : ControllerBase
         var result = await _service.GetByIdAsync(id);
         return result is null ? NotFound(new { message = "Question not found" }) : Ok(result);
     }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("random-by-category")]
+    public async Task<IActionResult> GetRandomQuestionsByCategory([FromBody] RandomQuestionSelectionRequest request)
+    {
+        if (request.CategorySelections == null || !request.CategorySelections.Any())
+        {
+            return BadRequest(new { message = "At least one category selection is required." });
+        }
+
+        var result = await _service.GetRandomQuestionsByCategoryAsync(request);
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpGet("categories-with-counts")]
+    public async Task<IActionResult> GetCategoriesWithCounts()
+    {
+        var result = await _service.GetCategoriesWithQuestionCountsAsync();
+        return Ok(result.Select(c => new
+        {
+            c.Id,
+            c.Name,
+            c.Description,
+            QuestionCount = c.Questions.Count(q => !q.IsDeleted)
+        }));
+    }
 }

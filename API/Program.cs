@@ -8,6 +8,7 @@ builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddIdentityServices(builder.Configuration);
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddProblemDetails();
 var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 builder.Services.AddCors(options =>
 {
@@ -43,6 +44,11 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Quiz Live API v1"));
+}
+else
+{
+    app.UseExceptionHandler();
+    app.UseHsts();
 }
 
 app.UseHttpsRedirection();

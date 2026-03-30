@@ -1,5 +1,5 @@
-<div class="layout" [class.guest-layout]="!auth.isLoggedIn()" [class.sidebar-open]="auth.isLoggedIn() && mobileSidebarOpen()">
-  @if (auth.isLoggedIn()) {
+<div class="layout" [class.guest-layout]="!auth.isLoggedIn()" [class.sidebar-open]="showMenu() && mobileSidebarOpen()">
+  @if (showMenu()) {
     <aside class="sidebar" [class.sidebar-open]="mobileSidebarOpen()">
       <div class="sidebar-brand">
         <div class="brand-mark">QL</div>
@@ -28,6 +28,14 @@
           <a routerLink="/quizzes" routerLinkActive="active" (click)="closeSidebar()">
             <span>Tests</span>
             <small>Build reusable test banks</small>
+          </a>
+          <a routerLink="/students/groups" routerLinkActive="active" (click)="closeSidebar()">
+            <span>Student Groups</span>
+            <small>Manage student groups</small>
+          </a>
+          <a routerLink="/students" routerLinkActive="active" (click)="closeSidebar()">
+            <span>Student Approval</span>
+            <small>Approve pending registrations</small>
           </a>
           <a routerLink="/game-sessions" routerLinkActive="active" (click)="closeSidebar()">
             <span>Sessions</span>
@@ -76,7 +84,7 @@
       (click)="closeSidebar()"
       aria-label="Close menu"></button>
 
-    @if (!mobileSidebarOpen()) {
+    @if (showMenu() && !mobileSidebarOpen()) {
       <button
         type="button"
         class="secondary menu-toggle menu-toggle-floating"
@@ -105,4 +113,5 @@
 </div>
 
 <app-confirm-dialog></app-confirm-dialog>
+<app-toast></app-toast>
 

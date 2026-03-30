@@ -18,6 +18,9 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IPlayerService, PlayerService>();
         services.AddScoped<ITestModeService, TestModeService>();
         services.AddScoped<IResultsService, ResultsService>();
+        services.AddScoped<IStudentGroupService, StudentGroupService>();
+        services.AddScoped<IQuizAccessService, QuizAccessService>();
+        services.AddScoped<IQuestionCategoryService, QuestionCategoryService>();
         services.AddHostedService<TimedSessionAdvancerHostedService>();
 
         services.AddDbContext<DataContext>(options =>

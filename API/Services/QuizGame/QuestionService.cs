@@ -44,6 +44,8 @@ public class QuestionService : IQuestionService
             AnswerSeconds = NormalizeAnswerSeconds(dto.AnswerSeconds),
             CreatedBy = userId,
             CreatedAt = DateTime.UtcNow,
+            CategoryId = dto.CategoryId,
+            QuizId = dto.QuizId,
             IsDeleted = false,
             Choices = dto.Choices.Select(c => new QuestionChoice
             {
@@ -55,6 +57,25 @@ public class QuestionService : IQuestionService
 
         _context.Set<Question>().Add(question);
         await _context.SaveChangesAsync();
+
+        if (dto.QuizId.HasValue)
+        {
+            var maxOrder = await _context.QuizQuestions
+                .Where(xq => xq.QuizId == dto.QuizId.Value && !xq.IsDeleted)
+                .Select(xq => (int?)xq.Order)
+                .MaxAsync() ?? 0;
+
+            _context.QuizQuestions.Add(new QuizQuestion
+            {
+                QuizId = dto.QuizId.Value,
+                QuestionId = question.Id,
+                Order = maxOrder + 1,
+                PointsOverride = null,
+                AnswerSeconds = dto.AnswerSeconds
+            });
+
+            await _context.SaveChangesAsync();
+        }
 
         return ToQuestionResponse(question);
     }
@@ -80,6 +101,7 @@ public class QuestionService : IQuestionService
         question.Explanation = string.IsNullOrWhiteSpace(dto.Explanation) ? null : dto.Explanation.Trim();
         question.Points = dto.Points;
         question.AnswerSeconds = NormalizeAnswerSeconds(dto.AnswerSeconds);
+        question.CategoryId = dto.CategoryId;
 
         var existingChoices = question.Choices
             .Where(c => !c.IsDeleted)
@@ -167,6 +189,8 @@ public class QuestionService : IQuestionService
         var dbQuery = _context.Set<Question>()
             .AsNoTracking()
             .Include(x => x.Choices.Where(c => !c.IsDeleted))
+            .Include(x => x.Category)
+            .Include(x => x.Quiz)
             .Where(x => !x.IsDeleted);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -192,6 +216,11 @@ public class QuestionService : IQuestionService
         {
             var difficulty = query.Difficulty.Trim().ToLower();
             dbQuery = dbQuery.Where(x => x.Difficulty != null && x.Difficulty.ToLower() == difficulty);
+        }
+
+        if (query.CategoryId.HasValue)
+        {
+            dbQuery = dbQuery.Where(x => x.CategoryId == query.CategoryId.Value);
         }
 
         var total = await dbQuery.CountAsync();
@@ -284,6 +313,10 @@ public class QuestionService : IQuestionService
             AnswerSeconds = question.AnswerSeconds,
             CreatedBy = question.CreatedBy,
             CreatedAt = question.CreatedAt,
+            CategoryId = question.CategoryId,
+            CategoryName = question.Category?.Name,
+            QuizId = question.QuizId,
+            QuizTitle = question.Quiz?.Title,
             Choices = question.Choices
                 .Where(c => !c.IsDeleted)
                 .OrderBy(c => c.Order)
@@ -496,5 +529,48 @@ public class QuestionService : IQuestionService
 
             File.Delete(path);
         }
+    }
+
+    public async Task<List<RandomQuestionResultDto>> GetRandomQuestionsByCategoryAsync(RandomQuestionSelectionRequest request)
+    {
+        var results = new List<RandomQuestionResultDto>();
+
+        foreach (var selection in request.CategorySelections)
+        {
+            var category = await _context.Set<QuestionCategory>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == selection.CategoryId);
+
+            if (category == null) continue;
+
+            var allQuestions = await _context.Set<Question>()
+                .AsNoTracking()
+                .Include(x => x.Choices.Where(c => !c.IsDeleted))
+                .Where(x => !x.IsDeleted && x.CategoryId == selection.CategoryId)
+                .ToListAsync();
+
+            var shuffled = allQuestions.OrderBy(_ => Guid.NewGuid()).Take(selection.Count).ToList();
+            var availableCount = allQuestions.Count;
+
+            results.Add(new RandomQuestionResultDto
+            {
+                CategoryId = selection.CategoryId,
+                CategoryName = category.Name,
+                RequestedCount = selection.Count,
+                AvailableCount = availableCount,
+                Questions = shuffled.Select(ToQuestionResponse).ToList()
+            });
+        }
+
+        return results;
+    }
+
+    public async Task<List<QuestionCategory>> GetCategoriesWithQuestionCountsAsync()
+    {
+        return await _context.Set<QuestionCategory>()
+            .AsNoTracking()
+            .Include(c => c.Questions.Where(q => !q.IsDeleted))
+            .OrderBy(c => c.Name)
+            .ToListAsync();
     }
 }

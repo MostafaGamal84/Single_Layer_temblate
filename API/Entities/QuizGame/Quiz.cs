@@ -9,11 +9,13 @@ public class Quiz : BaseEntity
     public QuizMode Mode { get; set; }
     public int DurationMinutes { get; set; }
     public bool IsPublished { get; set; }
+    public int MaxAttempts { get; set; } = 1;
     public int? TotalMarks { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public virtual ICollection<QuizQuestion> QuizQuestions { get; set; } = new List<QuizQuestion>();
     public virtual ICollection<QuizCategory> QuizCategories { get; set; } = new List<QuizCategory>();
+    public virtual QuizAccess? QuizAccess { get; set; }
 }
 
 public class QuizQuestion : BaseEntity

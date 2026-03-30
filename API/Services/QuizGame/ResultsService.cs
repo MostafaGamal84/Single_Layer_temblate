@@ -95,11 +95,14 @@ public class ResultsService : IResultsService
             .ToList();
     }
 
-    public async Task<TestResultDto?> GetTestAttemptResultAsync(int attemptId)
+    public async Task<TestResultDto?> GetTestAttemptResultAsync(int attemptId, int userId, bool canAccessAll)
     {
         var attempt = await _context.Set<QuizAttempt>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x =>
+                x.Id == attemptId &&
+                !x.IsDeleted &&
+                (canAccessAll || x.UserId == userId));
 
         if (attempt is null)
         {

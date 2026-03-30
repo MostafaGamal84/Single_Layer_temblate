@@ -4,7 +4,7 @@
   width: 100%;
   max-width: 100%;
   min-height: 100vh;
-  padding: 20px;
+  padding: 16px;
   overflow-x: clip;
 }
 
@@ -19,26 +19,26 @@
 
 .sidebar {
   position: fixed;
-  top: 20px;
-  left: 20px;
-  bottom: 20px;
-  width: min(340px, calc(100vw - 40px));
-  max-width: calc(100vw - 40px);
+  top: 16px;
+  left: 16px;
+  bottom: 16px;
+  width: min(320px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
   height: auto;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: 28px;
+  border-radius: 20px;
   border: 1px solid var(--shell-panel-border);
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
-  padding: 22px 18px;
+  padding: 18px 14px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  box-shadow: var(--shadow-panel);
-  backdrop-filter: blur(16px);
-  transform: translate3d(calc(-100% - 28px), 0, 0);
+  gap: 12px;
+  box-shadow: var(--sidebar-shadow);
+  backdrop-filter: blur(12px);
+  transform: translate3d(calc(-100% - 24px), 0, 0);
   transition: transform 0.24s ease, box-shadow 0.24s ease;
   will-change: transform;
   z-index: 40;
@@ -155,12 +155,12 @@
   background: var(--nav-item-bg);
   color: var(--nav-item-text);
   text-decoration: none;
-  padding: 12px 13px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 12px;
   text-align: left;
   cursor: pointer;
   display: grid;
-  gap: 3px;
+  gap: 2px;
   box-shadow: none;
   transition:
     transform 0.18s ease,
@@ -170,12 +170,13 @@
 }
 
 .sidebar a span {
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 .sidebar a small {
   color: var(--nav-item-subtext);
-  font-size: 0.77rem;
+  font-size: 0.75rem;
 }
 
 .sidebar a.active,
@@ -303,8 +304,34 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  padding: 76px 0 20px;
+  padding: 68px 0 16px;
   background: transparent;
+}
+
+.content.content-guest {
+  padding: 0;
+}
+
+.menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 100px;
+  padding: 0 12px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  background: var(--secondary-gradient);
+  border-radius: 10px;
+  min-height: 38px;
+}
+
+.menu-toggle-floating {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 32;
 }
 
 .content.content-guest {
@@ -423,24 +450,26 @@
 
 @media (max-width: 1040px) {
   .layout {
-    padding: 16px;
+    padding: 12px;
   }
 
   .sidebar {
-    top: 16px;
-    left: 16px;
-    bottom: 16px;
-    width: min(320px, calc(100vw - 32px));
-    max-width: calc(100vw - 32px);
+    top: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: min(300px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    border-radius: 18px;
+    padding: 14px 12px;
   }
 
   .menu-toggle-floating {
-    top: 16px;
-    left: 16px;
+    top: 12px;
+    left: 12px;
   }
 
   .content {
-    padding-top: 72px;
+    padding-top: 64px;
   }
 }
 
@@ -453,10 +482,10 @@
     top: 8px;
     left: 8px;
     bottom: 8px;
-    width: min(300px, calc(100vw - 16px));
+    width: min(280px, calc(100vw - 16px));
     max-width: calc(100vw - 16px);
-    border-radius: 22px;
-    padding: 14px 12px;
+    border-radius: 16px;
+    padding: 12px 10px;
   }
 
   .sidebar-role,
@@ -470,30 +499,30 @@
   }
 
   .sidebar-brand h2 {
-    font-size: 1.32rem;
+    font-size: 1.25rem;
   }
 
   .sidebar-brand p {
     margin-top: 4px;
-    font-size: 0.82rem;
+    font-size: 0.8rem;
   }
 
   .content {
-    padding: 62px 0 14px;
+    padding: 56px 0 12px;
   }
 
   .menu-toggle {
-    min-width: 108px;
-    padding: 0 12px;
+    min-width: 90px;
+    padding: 0 10px;
   }
 
   .menu-toggle-floating {
-    top: 12px;
-    left: 12px;
+    top: 10px;
+    left: 10px;
   }
 
   .guest-theme-toggle {
-    top: 12px;
-    right: 12px;
+    top: 10px;
+    right: 10px;
   }
 }

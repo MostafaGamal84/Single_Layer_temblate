@@ -1,84 +1,80 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { roleGuard } from './core/guards/role.guard';
-import { LoginComponent } from './features/auth/login.component';
-import { RegisterComponent } from './features/auth/register.component';
-import { QuestionsListComponent } from './features/questions/questions-list.component';
-import { QuestionFormComponent } from './features/questions/question-form.component';
-import { QuizzesListComponent } from './features/quizzes/quizzes-list.component';
-import { QuizFormComponent } from './features/quizzes/quiz-form.component';
-import { QuizDetailsComponent } from './features/quizzes/quiz-details.component';
-import { GameSessionsListComponent } from './features/game-sessions/game-sessions-list.component';
-import { GameSessionControlComponent } from './features/game-sessions/game-session-control.component';
-import { PlayerJoinComponent } from './features/player/player-join.component';
-import { PlayerWaitingRoomComponent } from './features/player/player-waiting-room.component';
-import { PlayerLiveQuestionComponent } from './features/player/player-live-question.component';
-import { PlayerResultComponent } from './features/player/player-result.component';
-import { PlayerLeaderboardComponent } from './features/player/player-leaderboard.component';
-import { PlayerHistoryComponent } from './features/player/player-history.component';
-import { TestModeListComponent } from './features/test-mode/test-mode-list.component';
-import { TestModeAttemptComponent } from './features/test-mode/test-mode-attempt.component';
-import { ResultsDashboardComponent } from './features/results/results-dashboard.component';
+import { pendingStatusGuard } from './core/guards/pending-status.guard';
 
 export const routes: Routes = [
-  { path: 'auth/login', component: LoginComponent },
-  { path: 'auth/register', component: RegisterComponent },
+  { path: 'auth/login', loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent) },
+  { path: 'auth/register', loadComponent: () => import('./features/auth/register.component').then((m) => m.RegisterComponent) },
+  { path: 'auth/pending', loadComponent: () => import('./features/auth/pending-registration.component').then((m) => m.PendingRegistrationComponent) },
+  { path: 'auth/pending-status', loadComponent: () => import('./features/auth/pending-status.component').then((m) => m.PendingStatusComponent) },
 
   {
     path: 'questions',
-    canActivate: [authGuard, roleGuard],
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Admin', 'Host'] },
     children: [
-      { path: '', component: QuestionsListComponent },
-      { path: 'new', component: QuestionFormComponent },
-      { path: ':id/edit', component: QuestionFormComponent }
+      { path: '', loadComponent: () => import('./features/questions/question-bank.component').then((m) => m.QuestionBankComponent) },
+      { path: 'new', loadComponent: () => import('./features/questions/question-form.component').then((m) => m.QuestionFormComponent) },
+      { path: ':id/edit', loadComponent: () => import('./features/questions/question-form.component').then((m) => m.QuestionFormComponent) }
     ]
   },
 
   {
     path: 'quizzes',
-    canActivate: [authGuard, roleGuard],
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Admin', 'Host'] },
     children: [
-      { path: '', component: QuizzesListComponent },
-      { path: 'new', component: QuizFormComponent },
-      { path: ':id/edit', component: QuizFormComponent },
-      { path: ':id', component: QuizDetailsComponent }
+      { path: '', loadComponent: () => import('./features/quizzes/quizzes-list.component').then((m) => m.QuizzesListComponent) },
+      { path: 'new', loadComponent: () => import('./features/quizzes/quiz-form.component').then((m) => m.QuizFormComponent) },
+      { path: ':id/edit', loadComponent: () => import('./features/quizzes/quiz-form.component').then((m) => m.QuizFormComponent) },
+      { path: ':id', loadComponent: () => import('./features/quizzes/quiz-details.component').then((m) => m.QuizDetailsComponent) },
+      { path: ':id/access', loadComponent: () => import('./features/quizzes/quiz-access.component').then((m) => m.QuizAccessComponent) }
     ]
   },
 
   {
     path: 'game-sessions',
-    canActivate: [authGuard, roleGuard],
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Admin', 'Host'] },
     children: [
-      { path: '', component: GameSessionsListComponent },
-      { path: ':id/control', component: GameSessionControlComponent }
+      { path: '', loadComponent: () => import('./features/game-sessions/game-sessions-list.component').then((m) => m.GameSessionsListComponent) },
+      { path: ':id/control', loadComponent: () => import('./features/game-sessions/game-session-control.component').then((m) => m.GameSessionControlComponent) }
     ]
   },
 
   {
     path: 'results',
-    canActivate: [authGuard, roleGuard],
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Admin', 'Host'] },
-    component: ResultsDashboardComponent
+    loadComponent: () => import('./features/results/results-dashboard.component').then((m) => m.ResultsDashboardComponent)
   },
 
-  { path: 'player/join', canActivate: [authGuard], component: PlayerJoinComponent },
-  { path: 'player/join/:code', canActivate: [authGuard], component: PlayerJoinComponent },
-  { path: 'player/session/:sessionId/waiting-room', canActivate: [authGuard], component: PlayerWaitingRoomComponent },
-  { path: 'player/session/:sessionId/live', canActivate: [authGuard], component: PlayerLiveQuestionComponent },
-  { path: 'player/session/:sessionId/leaderboard', canActivate: [authGuard], component: PlayerLeaderboardComponent },
-  { path: 'player/session/:sessionId/result/:participantId', canActivate: [authGuard], component: PlayerResultComponent },
+  {
+    path: 'students',
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
+    data: { roles: ['Admin', 'Host'] },
+    children: [
+      { path: '', loadComponent: () => import('./features/students/student-approval.component').then((m) => m.StudentApprovalComponent) },
+      { path: 'groups', loadComponent: () => import('./features/students/student-groups.component').then((m) => m.StudentGroupsComponent) }
+    ]
+  },
+
+  { path: 'player/join', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/player/player-join.component').then((m) => m.PlayerJoinComponent) },
+  { path: 'player/join/:code', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/player/player-join.component').then((m) => m.PlayerJoinComponent) },
+  { path: 'player/session/:sessionId/waiting-room', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/player/player-waiting-room.component').then((m) => m.PlayerWaitingRoomComponent) },
+  { path: 'player/session/:sessionId/live', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/player/player-live-question.component').then((m) => m.PlayerLiveQuestionComponent) },
+  { path: 'player/session/:sessionId/leaderboard', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/player/player-leaderboard.component').then((m) => m.PlayerLeaderboardComponent) },
+  { path: 'player/session/:sessionId/result/:participantId', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/player/player-result.component').then((m) => m.PlayerResultComponent) },
   {
     path: 'player/history',
-    canActivate: [authGuard, roleGuard],
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Player', 'Admin', 'Host'] },
-    component: PlayerHistoryComponent
+    loadComponent: () => import('./features/player/player-history.component').then((m) => m.PlayerHistoryComponent)
   },
 
-  { path: 'test-mode', canActivate: [authGuard], component: TestModeListComponent },
-  { path: 'test-mode/attempt/:attemptId', canActivate: [authGuard], component: TestModeAttemptComponent },
+  { path: 'test-mode', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/test-mode/test-mode-list.component').then((m) => m.TestModeListComponent) },
+  { path: 'test-mode/attempt/:attemptId', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/test-mode/test-mode-attempt.component').then((m) => m.TestModeAttemptComponent) },
 
   { path: '', redirectTo: '/auth/login', pathMatch: 'full' },
   { path: '**', redirectTo: '/auth/login' }

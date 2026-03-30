@@ -1,31 +1,39 @@
-# Production Deploy (Somee - API + Front Together)
+# Production Publish
 
-## 1) Build and publish
-Run from project root:
+## Build the deployable package
+
+Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\publish-production.ps1
+.\scripts\publish-production.ps1
 ```
 
-This will:
-- build Angular in production mode
-- copy front files into `API/wwwroot`
-- publish ASP.NET Core Release into `artifacts/publish-production`
+This command will:
 
-## 2) Upload to Somee
-- Upload all files from `artifacts/publish-production` to your Somee site root.
-- Set startup command (if needed by your plan) to run the published app.
+1. Run `dotnet publish` for the API in `Release`.
+2. Build the Angular frontend in production mode automatically.
+3. Copy the frontend build into the publish output under `wwwroot`.
+4. Create a ready-to-upload package in `publish\production`.
+5. Create `publish\quiz-system-production.zip`.
 
-## 3) Config
-- `API/appsettings.json` now includes:
-  - production DB connection
-  - `TokenKey`
-  - CORS allowed origins
-- Front production environment uses relative paths:
-  - `apiBaseUrl: /api`
-  - `hubUrl: /hubs/live-game`
+## Required production settings
 
-## 4) Notes
-- Keep `TokenKey` long and secret.
-- If domain changes, update `Cors:AllowedOrigins`.
-- Uploaded question cover images are stored under `wwwroot/uploads`.
+The application supports normal ASP.NET Core configuration overrides. On the server, prefer environment variables for secrets:
+
+```text
+ConnectionStrings__DefaultConnection
+TokenKey
+Cors__AllowedOrigins__0
+Cors__AllowedOrigins__1
+```
+
+If you deploy to the same domain for frontend and API, the Angular production build already uses:
+
+```text
+/api
+/hubs/live-game
+```
+
+## Important note about uploads
+
+Uploaded quiz/question images live under `wwwroot\uploads`. If you have existing production uploads on the server, keep that folder when replacing the deployment package.

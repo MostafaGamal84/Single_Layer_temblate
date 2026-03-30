@@ -11,6 +11,8 @@ public class TestAttemptResponseDto
     public int QuizId { get; set; }
     public int CurrentQuestionIndex { get; set; }
     public bool IsFinished { get; set; }
+    public bool Allowed { get; set; } = true;
+    public string? Message { get; set; }
 }
 
 public class SubmitTestAnswerDto
@@ -46,6 +48,8 @@ public class TestAttemptOverviewDto
     public int TotalQuestions { get; set; }
     public int AnsweredQuestions { get; set; }
     public int RemainingQuestions { get; set; }
+    public DateTime? TimerStartedAt { get; set; }
+    public int ElapsedSeconds { get; set; }
     public List<TestAttemptQuestionItemDto> Questions { get; set; } = new();
 }
 

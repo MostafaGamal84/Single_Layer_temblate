@@ -112,6 +112,9 @@ namespace API.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -382,6 +385,9 @@ namespace API.Migrations
                     b.Property<int>("AnswerSeconds")
                         .HasColumnType("int");
 
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -400,6 +406,9 @@ namespace API.Migrations
                     b.Property<int>("Points")
                         .HasColumnType("int");
 
+                    b.Property<int?>("QuizId")
+                        .HasColumnType("int");
+
                     b.Property<int>("SelectionMode")
                         .HasColumnType("int");
 
@@ -416,7 +425,40 @@ namespace API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("QuizId");
+
                     b.ToTable("Questions");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuestionCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Color")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("QuestionCategories");
                 });
 
             modelBuilder.Entity("API.Entities.QuizGame.QuestionChoice", b =>
@@ -476,6 +518,9 @@ namespace API.Migrations
                     b.Property<bool>("IsPublished")
                         .HasColumnType("bit");
 
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("int");
+
                     b.Property<int>("Mode")
                         .HasColumnType("int");
 
@@ -491,6 +536,122 @@ namespace API.Migrations
                     b.ToTable("Quizzes");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccess", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccessType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ExamMode")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuizId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ScheduledEndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ScheduledStartTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("TimerMinutes")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuizId")
+                        .IsUnique();
+
+                    b.ToTable("QuizAccesses");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccessGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("QuizAccessId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentGroupId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuizAccessId");
+
+                    b.HasIndex("StudentGroupId");
+
+                    b.ToTable("QuizAccessGroups");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccessUser", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("ExtraAttemptsApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ExtraAttemptsApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ExtraAttemptsApprovedBy")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("QuizAccessId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("QuizAccessId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("QuizAccessUsers");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.QuizAttempt", b =>
                 {
                     b.Property<int>("Id")
@@ -500,6 +661,9 @@ namespace API.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CurrentQuestionIndex")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ElapsedSeconds")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("EndedAt")
@@ -518,6 +682,9 @@ namespace API.Migrations
                         .HasColumnType("int");
 
                     b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("TimerStartedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("TotalScore")
@@ -639,6 +806,69 @@ namespace API.Migrations
                     b.HasIndex("QuizId");
 
                     b.ToTable("QuizQuestions");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.StudentGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("StudentGroups");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.StudentGroupMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StudentGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentGroupId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("StudentGroupMembers");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
@@ -804,6 +1034,22 @@ namespace API.Migrations
                     b.Navigation("SelectedChoice");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.Question", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.QuestionCategory", "Category")
+                        .WithMany("Questions")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("API.Entities.QuizGame.Quiz", "Quiz")
+                        .WithMany()
+                        .HasForeignKey("QuizId");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Quiz");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.QuestionChoice", b =>
                 {
                     b.HasOne("API.Entities.QuizGame.Question", "Question")
@@ -813,6 +1059,55 @@ namespace API.Migrations
                         .IsRequired();
 
                     b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccess", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.Quiz", "Quiz")
+                        .WithOne("QuizAccess")
+                        .HasForeignKey("API.Entities.QuizGame.QuizAccess", "QuizId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Quiz");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccessGroup", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.QuizAccess", "QuizAccess")
+                        .WithMany("AccessGroups")
+                        .HasForeignKey("QuizAccessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Entities.QuizGame.StudentGroup", "StudentGroup")
+                        .WithMany()
+                        .HasForeignKey("StudentGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuizAccess");
+
+                    b.Navigation("StudentGroup");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccessUser", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.QuizAccess", "QuizAccess")
+                        .WithMany("AccessUsers")
+                        .HasForeignKey("QuizAccessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("QuizAccess");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("API.Entities.QuizGame.QuizAttempt", b =>
@@ -890,6 +1185,25 @@ namespace API.Migrations
                     b.Navigation("Quiz");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.StudentGroupMember", b =>
+                {
+                    b.HasOne("API.Entities.QuizGame.StudentGroup", "StudentGroup")
+                        .WithMany("Members")
+                        .HasForeignKey("StudentGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("API.Entities.AppUser", "User")
+                        .WithMany("GroupMemberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StudentGroup");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.HasOne("API.Entities.AppRole", null)
@@ -933,6 +1247,8 @@ namespace API.Migrations
 
             modelBuilder.Entity("API.Entities.AppUser", b =>
                 {
+                    b.Navigation("GroupMemberships");
+
                     b.Navigation("UserRoles");
                 });
 
@@ -960,16 +1276,35 @@ namespace API.Migrations
                     b.Navigation("QuizQuestions");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.QuestionCategory", b =>
+                {
+                    b.Navigation("Questions");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.Quiz", b =>
                 {
+                    b.Navigation("QuizAccess");
+
                     b.Navigation("QuizCategories");
 
                     b.Navigation("QuizQuestions");
                 });
 
+            modelBuilder.Entity("API.Entities.QuizGame.QuizAccess", b =>
+                {
+                    b.Navigation("AccessGroups");
+
+                    b.Navigation("AccessUsers");
+                });
+
             modelBuilder.Entity("API.Entities.QuizGame.QuizAttempt", b =>
                 {
                     b.Navigation("Answers");
+                });
+
+            modelBuilder.Entity("API.Entities.QuizGame.StudentGroup", b =>
+                {
+                    b.Navigation("Members");
                 });
 #pragma warning restore 612, 618
         }

@@ -27,6 +27,43 @@ public class TestModeService : ITestModeService
             return null;
         }
 
+        var maxAttempts = quiz.MaxAttempts > 0 ? quiz.MaxAttempts : 1;
+
+        if (userId.HasValue)
+        {
+            var existingActiveAttempt = await _context.Set<QuizAttempt>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.QuizId == quizId && x.UserId == userId && !x.IsFinished && !x.IsDeleted);
+
+            if (existingActiveAttempt != null)
+            {
+                return new TestAttemptResponseDto
+                {
+                    AttemptId = existingActiveAttempt.Id,
+                    QuizId = quizId,
+                    CurrentQuestionIndex = existingActiveAttempt.CurrentQuestionIndex,
+                    IsFinished = existingActiveAttempt.IsFinished,
+                    Allowed = true,
+                    Message = "You have an active attempt. Resuming..."
+                };
+            }
+
+            var completedAttemptsCount = await _context.Set<QuizAttempt>()
+                .AsNoTracking()
+                .CountAsync(x => x.QuizId == quizId && x.UserId == userId && x.IsFinished && !x.IsDeleted);
+
+            if (completedAttemptsCount >= maxAttempts)
+            {
+                return new TestAttemptResponseDto
+                {
+                    AttemptId = 0,
+                    QuizId = quizId,
+                    Allowed = false,
+                    Message = $"You have reached the maximum number of attempts ({maxAttempts}) for this quiz."
+                };
+            }
+        }
+
         var attempt = new QuizAttempt
         {
             QuizId = quizId,
@@ -36,7 +73,9 @@ public class TestModeService : ITestModeService
             IsFinished = false,
             TotalScore = 0,
             CurrentQuestionIndex = 0,
-            IsDeleted = false
+            IsDeleted = false,
+            TimerStartedAt = DateTime.UtcNow,
+            ElapsedSeconds = 0
         };
 
         _context.Set<QuizAttempt>().Add(attempt);
@@ -47,16 +86,17 @@ public class TestModeService : ITestModeService
             AttemptId = attempt.Id,
             QuizId = attempt.QuizId,
             CurrentQuestionIndex = attempt.CurrentQuestionIndex,
-            IsFinished = attempt.IsFinished
+            IsFinished = attempt.IsFinished,
+            Allowed = true
         };
     }
 
-    public async Task<TestAttemptOverviewDto?> GetAttemptOverviewAsync(int attemptId)
+    public async Task<TestAttemptOverviewDto?> GetAttemptOverviewAsync(int attemptId, int userId, bool canAccessAll)
     {
-        var attempt = await _context.Set<QuizAttempt>()
+        var attempt = await AccessibleAttempts(userId, canAccessAll)
             .AsNoTracking()
             .Include(x => x.Quiz)
-            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == attemptId);
 
         if (attempt is null)
         {
@@ -80,6 +120,10 @@ public class TestModeService : ITestModeService
         var totalQuestions = orderedQuestions.Count;
         var currentIndex = ResolveOverviewQuestionIndex(attempt.CurrentQuestionIndex, orderedQuestions, answeredSet);
 
+        var elapsedSeconds = attempt.TimerStartedAt.HasValue
+            ? (int)Math.Round((DateTime.UtcNow - attempt.TimerStartedAt.Value).TotalSeconds)
+            : attempt.ElapsedSeconds ?? 0;
+
         return new TestAttemptOverviewDto
         {
             AttemptId = attempt.Id,
@@ -91,6 +135,8 @@ public class TestModeService : ITestModeService
             TotalQuestions = totalQuestions,
             AnsweredQuestions = answeredSet.Count,
             RemainingQuestions = Math.Max(0, totalQuestions - answeredSet.Count),
+            TimerStartedAt = attempt.TimerStartedAt,
+            ElapsedSeconds = elapsedSeconds,
             Questions = orderedQuestions.Select((qq, index) => new TestAttemptQuestionItemDto
             {
                 QuestionIndex = index,
@@ -102,11 +148,11 @@ public class TestModeService : ITestModeService
         };
     }
 
-    public async Task<List<TestModeQuestionDto>> GetQuestionsAsync(int attemptId)
+    public async Task<List<TestModeQuestionDto>> GetQuestionsAsync(int attemptId, int userId, bool canAccessAll)
     {
-        var attempt = await _context.Set<QuizAttempt>()
+        var attempt = await AccessibleAttempts(userId, canAccessAll)
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == attemptId);
 
         if (attempt is null)
         {
@@ -143,11 +189,11 @@ public class TestModeService : ITestModeService
             .ToList();
     }
 
-    public async Task<TestModeQuestionDto?> GetCurrentQuestionAsync(int attemptId, int? questionIndex = null)
+    public async Task<TestModeQuestionDto?> GetCurrentQuestionAsync(int attemptId, int userId, int? questionIndex, bool canAccessAll)
     {
-        var attempt = await _context.Set<QuizAttempt>()
+        var attempt = await AccessibleAttempts(userId, canAccessAll)
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == attemptId);
 
         if (attempt is null)
         {
@@ -191,9 +237,9 @@ public class TestModeService : ITestModeService
         return MapTestQuestion(attempt.IsFinished, quizQuestion, answer, resolvedIndex.Value, orderedQuestions.Count);
     }
 
-    public async Task<TestAnswerSubmitResponseDto> SubmitAnswerAsync(int attemptId, SubmitTestAnswerDto dto)
+    public async Task<TestAnswerSubmitResponseDto> SubmitAnswerAsync(int attemptId, int userId, SubmitTestAnswerDto dto, bool canAccessAll)
     {
-        var attempt = await _context.Set<QuizAttempt>().FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+        var attempt = await AccessibleAttempts(userId, canAccessAll).FirstOrDefaultAsync(x => x.Id == attemptId);
         if (attempt is null || attempt.IsFinished)
         {
             return Rejected("Attempt is not active.");
@@ -292,9 +338,9 @@ public class TestModeService : ITestModeService
         };
     }
 
-    public async Task<TestResultDto?> FinishAsync(int attemptId, FinishTestAttemptDto dto)
+    public async Task<TestResultDto?> FinishAsync(int attemptId, int userId, FinishTestAttemptDto dto, bool canAccessAll)
     {
-        var attempt = await _context.Set<QuizAttempt>().FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+        var attempt = await AccessibleAttempts(userId, canAccessAll).FirstOrDefaultAsync(x => x.Id == attemptId);
         if (attempt is null)
         {
             return null;
@@ -302,7 +348,7 @@ public class TestModeService : ITestModeService
 
         if (attempt.IsFinished)
         {
-            return await GetResultAsync(attemptId);
+            return await GetResultAsync(attemptId, userId, canAccessAll);
         }
 
         var orderedQuestions = await _context.Set<QuizQuestion>()
@@ -397,14 +443,33 @@ public class TestModeService : ITestModeService
         attempt.CurrentQuestionIndex = orderedQuestions.Count > 0 ? orderedQuestions.Count - 1 : 0;
 
         await _context.SaveChangesAsync();
-        return await GetResultAsync(attemptId);
+
+        if (attempt.UserId.HasValue)
+        {
+            var access = await _context.Set<QuizAccess>()
+                .Include(x => x.AccessUsers)
+                .FirstOrDefaultAsync(a => a.QuizId == attempt.QuizId && !a.IsDeleted);
+
+            if (access != null && access.AccessType == ExamAccessType.Custom)
+            {
+                var accessUser = access.AccessUsers.FirstOrDefault(u => u.UserId == attempt.UserId.Value);
+                if (accessUser != null && accessUser.Status == AccessRequestStatus.Approved)
+                {
+                    accessUser.AttemptCount++;
+                    await _context.SaveChangesAsync();
+                }
+            }
+        }
+
+        return await GetResultAsync(attemptId, userId, canAccessAll);
     }
-    public async Task<TestResultDto?> GetResultAsync(int attemptId)
+
+    public async Task<TestResultDto?> GetResultAsync(int attemptId, int userId, bool canAccessAll)
     {
-        var attempt = await _context.Set<QuizAttempt>()
+        var attempt = await AccessibleAttempts(userId, canAccessAll)
             .AsNoTracking()
             .Include(x => x.Quiz)
-            .FirstOrDefaultAsync(x => x.Id == attemptId && !x.IsDeleted);
+            .FirstOrDefaultAsync(x => x.Id == attemptId);
 
         if (attempt is null)
         {
@@ -539,6 +604,12 @@ public class TestModeService : ITestModeService
                 DurationSeconds = durationSeconds
             };
         }).ToList();
+    }
+
+    private IQueryable<QuizAttempt> AccessibleAttempts(int userId, bool canAccessAll)
+    {
+        return _context.Set<QuizAttempt>()
+            .Where(x => !x.IsDeleted && (canAccessAll || x.UserId == userId));
     }
 
     private static bool TryNormalizeFinishAnswer(Question question, SubmitTestAnswerDto dto, out List<int> selectedChoiceIds, out string? textAnswer)

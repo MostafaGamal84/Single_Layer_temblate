@@ -1,5 +1,27 @@
 export type UserRole = 'Admin' | 'Host' | 'Player';
 
+export const enum ExamMode {
+  Live = 1,
+  Test = 2
+}
+
+export const enum ExamAccessType {
+  Public = 1,
+  Custom = 2
+}
+
+export const enum StudentStatus {
+  Pending = 0,
+  Active = 1,
+  Rejected = 2
+}
+
+export const enum AccessRequestStatus {
+  Pending = 1,
+  Approved = 2,
+  Rejected = 3
+}
+
 export interface AuthUser {
   token: string;
   email?: string;
@@ -38,6 +60,11 @@ export interface Question {
   explanation?: string;
   points: number;
   answerSeconds: number;
+  categoryId?: number;
+  categoryName?: string;
+  quizId?: number;
+  quizTitle?: string;
+  isOwnedByQuiz?: boolean;
   choices: QuestionChoice[];
 }
 

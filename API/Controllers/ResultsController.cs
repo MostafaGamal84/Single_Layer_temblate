@@ -38,11 +38,11 @@ public class ResultsController : ControllerBase
         return Ok(await _service.GetSessionQuestionsAnalysisAsync(sessionId));
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Player,Admin,Host")]
     [HttpGet("test-mode/attempts/{attemptId:int}")]
     public async Task<IActionResult> TestAttempt(int attemptId)
     {
-        var result = await _service.GetTestAttemptResultAsync(attemptId);
+        var result = await _service.GetTestAttemptResultAsync(attemptId, User.GetUserId(), CanManageAttempts());
         return result is null ? NotFound(new { message = "Attempt not found" }) : Ok(result);
     }
 
@@ -60,5 +60,10 @@ public class ResultsController : ControllerBase
     {
         var userId = User.GetUserId();
         return Ok(await _service.GetPlayerSessionHistoryAsync(userId));
+    }
+
+    private bool CanManageAttempts()
+    {
+        return User.IsInRole("Admin") || User.IsInRole("Host");
     }
 }

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -40,10 +40,17 @@ import { environment } from '../../../environments/environment';
                 <span>Remaining</span>
                 <strong>{{ remainingQuestionsCount() }}</strong>
               </div>
-              <div class="stat-box">
-                <span>Limit</span>
-                <strong>{{ durationLabel() }}</strong>
-              </div>
+              @if (overview.durationMinutes > 0) {
+                <div class="stat-box" [class.timer-warning]="remainingSeconds <= 60 && remainingSeconds > 0" [class.timer-critical]="remainingSeconds <= 30">
+                  <span>Time Left</span>
+                  <strong>{{ formatTimer(remainingSeconds) }}</strong>
+                </div>
+              } @else {
+                <div class="stat-box">
+                  <span>Limit</span>
+                  <strong>{{ durationLabel() }}</strong>
+                </div>
+              }
             </div>
           </section>
 
@@ -319,6 +326,30 @@ import { environment } from '../../../environments/environment';
     .stat-box strong {
       color: var(--text);
       font-size: 1.12rem;
+    }
+
+    .stat-box.timer-warning {
+      border-color: var(--warning-border);
+      background: var(--warning-tint);
+    }
+
+    .stat-box.timer-warning strong {
+      color: var(--warning);
+    }
+
+    .stat-box.timer-critical {
+      border-color: var(--alert-border);
+      background: var(--danger-tint);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .stat-box.timer-critical strong {
+      color: var(--text-danger);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
     }
 
     .board-head,
@@ -670,7 +701,7 @@ import { environment } from '../../../environments/environment';
     }
   `]
 })
-export class TestModeAttemptComponent implements OnInit {
+export class TestModeAttemptComponent implements OnInit, OnDestroy {
   attemptId = 0;
   overview: any;
   questionData: any;
@@ -686,12 +717,18 @@ export class TestModeAttemptComponent implements OnInit {
   private questionsCache: any[] = [];
   private draftChoices = new Map<number, number[]>();
   private draftTexts = new Map<number, string>();
+  private timerInterval: any = null;
+  remainingSeconds = 0;
 
   constructor(private route: ActivatedRoute, private service: TestModeService, private router: Router) {}
 
   ngOnInit(): void {
     this.attemptId = Number(this.route.snapshot.paramMap.get('attemptId'));
     this.loadAttempt();
+  }
+
+  ngOnDestroy(): void {
+    this.stopTimer();
   }
 
   loadAttempt(preferredIndex?: number | null): void {
@@ -706,11 +743,13 @@ export class TestModeAttemptComponent implements OnInit {
           this.overview = null;
           this.questionData = null;
           this.questionsCache = [];
+          this.stopTimer();
           this.loadResult();
           return;
         }
 
         this.overview = res;
+        this.initializeTimer();
 
         if (!this.overview?.questions?.length) {
           this.questionsCache = [];
@@ -865,6 +904,64 @@ export class TestModeAttemptComponent implements OnInit {
     }
 
     return item?.isCorrect ? 'Correct' : 'Wrong';
+  }
+
+  formatTimer(seconds: number): string {
+    if (seconds <= 0) return '00:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  private initializeTimer(): void {
+    this.stopTimer();
+    const durationMinutes = this.overview?.durationMinutes ?? 0;
+    if (durationMinutes <= 0) {
+      this.remainingSeconds = 0;
+      return;
+    }
+
+    const timerStartedAt = this.overview?.timerStartedAt;
+    const elapsedSeconds = this.overview?.elapsedSeconds ?? 0;
+    const totalSeconds = durationMinutes * 60;
+
+    if (timerStartedAt) {
+      const serverStartMs = new Date(timerStartedAt + 'Z').getTime();
+      const nowMs = Date.now();
+      const elapsedMs = Math.max(0, nowMs - serverStartMs);
+      const elapsed = Math.floor(elapsedMs / 1000);
+      this.remainingSeconds = Math.max(0, totalSeconds - elapsed);
+    } else {
+      this.remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+    }
+
+    this.timerInterval = setInterval(() => {
+      if (this.remainingSeconds > 0) {
+        this.remainingSeconds--;
+        if (this.remainingSeconds <= 0) {
+          this.onTimerExpired();
+        }
+      }
+    }, 1000);
+  }
+
+  private stopTimer(): void {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  private onTimerExpired(): void {
+    this.stopTimer();
+    this.error = 'Time is up! Your exam has been automatically submitted.';
+    if (!this.isFinishing && !this.result) {
+      this.autoSubmit();
+    }
+  }
+
+  private autoSubmit(): void {
+    this.finish();
   }
 
   private loadQuestions(preferredIndex?: number | null): void {

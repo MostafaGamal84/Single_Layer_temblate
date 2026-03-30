@@ -133,8 +133,19 @@ export class TestModeListComponent implements OnInit {
   }
 
   start(quizId: number): void {
+    this.error = '';
     this.testService.start(quizId).subscribe({
-      next: (res) => this.router.navigate(['/test-mode/attempt', res.attemptId]),
+      next: (res) => {
+        const allowed = res?.allowed ?? res?.Allowed ?? true;
+        if (allowed === false) {
+          this.error = res?.message || 'You have reached the maximum number of attempts.';
+          return;
+        }
+        const attemptId = res?.attemptId ?? res?.AttemptId ?? 0;
+        if (attemptId > 0) {
+          this.router.navigate(['/test-mode/attempt', attemptId]);
+        }
+      },
       error: (err) => this.error = err?.error?.message || 'Failed to start attempt'
     });
   }

@@ -37,6 +37,8 @@ public class QuestionCreateUpdateDto
     public string? Explanation { get; set; }
     public int Points { get; set; }
     public int AnswerSeconds { get; set; } = 30;
+    public int? CategoryId { get; set; }
+    public int? QuizId { get; set; }
     public List<QuestionChoiceDto> Choices { get; set; } = new();
 }
 
@@ -54,6 +56,10 @@ public class QuestionResponseDto
     public int AnswerSeconds { get; set; } = 30;
     public int? CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
+    public int? CategoryId { get; set; }
+    public string? CategoryName { get; set; }
+    public int? QuizId { get; set; }
+    public string? QuizTitle { get; set; }
     public List<QuestionChoiceDto> Choices { get; set; } = new();
 }
 
@@ -62,4 +68,25 @@ public class QuestionQueryDto : PagedRequestDto
     public QuestionType? Type { get; set; }
     public QuestionSelectionMode? SelectionMode { get; set; }
     public string? Difficulty { get; set; }
+    public int? CategoryId { get; set; }
+}
+
+public class CategoryRandomQuestionRequest
+{
+    public int CategoryId { get; set; }
+    public int Count { get; set; }
+}
+
+public class RandomQuestionSelectionRequest
+{
+    public List<CategoryRandomQuestionRequest> CategorySelections { get; set; } = new();
+}
+
+public class RandomQuestionResultDto
+{
+    public int CategoryId { get; set; }
+    public string CategoryName { get; set; } = string.Empty;
+    public int RequestedCount { get; set; }
+    public int AvailableCount { get; set; }
+    public List<QuestionResponseDto> Questions { get; set; } = new();
 }

@@ -72,6 +72,11 @@ export class QuestionService {
       explanation: item?.explanation ?? item?.Explanation ?? undefined,
       points: Number(item?.points ?? item?.Points ?? item?.pointsOverride ?? item?.PointsOverride ?? 0),
       answerSeconds: Number(item?.answerSeconds ?? item?.AnswerSeconds ?? 30),
+      categoryId: item?.categoryId ?? item?.CategoryId ?? undefined,
+      categoryName: item?.categoryName ?? item?.CategoryName ?? undefined,
+      quizId: item?.quizId ?? item?.QuizId ?? undefined,
+      quizTitle: item?.quizTitle ?? item?.QuizTitle ?? undefined,
+      isOwnedByQuiz: Boolean(item?.isOwnedByQuiz ?? item?.IsOwnedByQuiz ?? false),
       choices: rawChoices.map((c: any, index: number) => ({
         id: Number(c?.id ?? c?.Id ?? 0),
         choiceText: String(c?.choiceText ?? c?.ChoiceText ?? ''),
@@ -93,6 +98,14 @@ export class QuestionService {
     const formData = new FormData();
     formData.append('file', file);
     return this.http.post<any>(`${this.base}/${questionId}/choices/${choiceId}/image`, formData);
+  }
+
+  getRandomByCategory(request: { categorySelections: { categoryId: number; count: number }[] }) {
+    return this.http.post<any>(`${this.base}/random-by-category`, request);
+  }
+
+  getCategoriesWithCounts() {
+    return this.http.get<any>(`${this.base}/categories-with-counts`);
   }
 
   private resolveAssetUrl(value: any): string {

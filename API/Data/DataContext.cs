@@ -17,6 +17,7 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
     public DbSet<Question> Questions => Set<Question>();
     public DbSet<QuestionChoice> QuestionChoices => Set<QuestionChoice>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<QuestionCategory> QuestionCategories => Set<QuestionCategory>();
     public DbSet<Quiz> Quizzes => Set<Quiz>();
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
     public DbSet<QuizCategory> QuizCategories => Set<QuizCategory>();
@@ -25,6 +26,11 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
     public DbSet<PlayerAnswer> PlayerAnswers => Set<PlayerAnswer>();
     public DbSet<QuizAttempt> QuizAttempts => Set<QuizAttempt>();
     public DbSet<QuizAttemptAnswer> QuizAttemptAnswers => Set<QuizAttemptAnswer>();
+    public DbSet<StudentGroup> StudentGroups => Set<StudentGroup>();
+    public DbSet<StudentGroupMember> StudentGroupMembers => Set<StudentGroupMember>();
+    public DbSet<QuizAccess> QuizAccesses => Set<QuizAccess>();
+    public DbSet<QuizAccessUser> QuizAccessUsers => Set<QuizAccessUser>();
+    public DbSet<QuizAccessGroup> QuizAccessGroups => Set<QuizAccessGroup>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -71,6 +77,12 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
             .WithOne(x => x.Question)
             .HasForeignKey(x => x.QuestionId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<QuestionCategory>()
+            .HasMany(x => x.Questions)
+            .WithOne(x => x.Category)
+            .HasForeignKey(x => x.CategoryId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.Entity<GameSession>()
             .HasOne(x => x.Quiz)
@@ -147,5 +159,50 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
         builder.Entity<QuizCategory>()
             .HasIndex(x => new { x.QuizId, x.CategoryId })
             .IsUnique();
+
+        builder.Entity<StudentGroup>()
+            .HasMany(x => x.Members)
+            .WithOne(x => x.StudentGroup)
+            .HasForeignKey(x => x.StudentGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<StudentGroupMember>()
+            .HasOne(x => x.User)
+            .WithMany(x => x.GroupMemberships)
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<QuizAccess>()
+            .HasOne(x => x.Quiz)
+            .WithOne(x => x.QuizAccess)
+            .HasForeignKey<QuizAccess>(x => x.QuizId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<QuizAccess>()
+            .HasMany(x => x.AccessUsers)
+            .WithOne(x => x.QuizAccess)
+            .HasForeignKey(x => x.QuizAccessId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<QuizAccess>()
+            .HasMany(x => x.AccessGroups)
+            .WithOne(x => x.QuizAccess)
+            .HasForeignKey(x => x.QuizAccessId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<QuizAccessGroup>()
+            .HasOne(x => x.StudentGroup)
+            .WithMany()
+            .HasForeignKey(x => x.StudentGroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<QuizAccessUser>()
+            .HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<StudentGroup>()
+            .HasIndex(x => x.Name);
     }
 }

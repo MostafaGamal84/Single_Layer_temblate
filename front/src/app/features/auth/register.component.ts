@@ -77,6 +77,21 @@ import { AuthService } from '../../core/services/auth.service';
               {{ loading ? 'Loading...' : 'Register' }}
             </button>
 
+            @if (pendingApproval) {
+              <div class="pending-notice">
+                <div class="pending-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                </div>
+                <h4>Registration Submitted</h4>
+                <p>Your account is pending approval by an administrator.</p>
+                <p class="pending-note">You will be able to login once your account is approved.</p>
+                <a routerLink="/auth/login" class="pending-link">Go to Login</a>
+              </div>
+            }
+
             @if (success) { <div class="success">{{ success }}</div> }
             @if (error) { <div class="alert">{{ error }}</div> }
 
@@ -88,7 +103,65 @@ import { AuthService } from '../../core/services/auth.service';
         </section>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    .pending-notice {
+      margin-top: 20px;
+      padding: 20px;
+      background: var(--warning-tint);
+      border: 1px solid var(--warning-border);
+      border-radius: 14px;
+      text-align: center;
+    }
+
+    .pending-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--warning);
+      margin-bottom: 12px;
+    }
+
+    .pending-icon svg {
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    .pending-notice h4 {
+      margin: 0 0 8px;
+      color: var(--warning);
+      font-size: 1.1rem;
+    }
+
+    .pending-notice p {
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+
+    .pending-note {
+      font-size: 0.9rem;
+      color: var(--muted) !important;
+    }
+
+    .pending-link {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 10px 20px;
+      background: var(--warning);
+      color: white;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .pending-link:hover {
+      filter: brightness(1.1);
+    }
+  `]
 })
 export class RegisterComponent {
   firstName = '';
@@ -100,12 +173,14 @@ export class RegisterComponent {
   loading = false;
   error = '';
   success = '';
+  pendingApproval = false;
 
   constructor(private auth: AuthService, private router: Router) {}
 
   register(): void {
     this.error = '';
     this.success = '';
+    this.pendingApproval = false;
 
     if (!this.firstName.trim() || !this.lastName.trim() || !this.email.trim() || !this.password.trim()) {
       this.error = 'All fields are required';
@@ -131,10 +206,16 @@ export class RegisterComponent {
       lastName: this.lastName,
       role: this.role
     }).subscribe({
-      next: () => {
+      next: (res: any) => {
         this.loading = false;
-        this.success = 'Registration successful';
-        this.router.navigate([this.role === 'Player' ? '/player/history' : '/questions']);
+        if (res?.message?.includes('pending')) {
+          this.pendingApproval = true;
+          this.success = '';
+        } else {
+          this.success = 'Registration successful';
+          const redirectPath = this.role === 'Player' ? '/player/history' : '/questions';
+          setTimeout(() => this.router.navigate([redirectPath]), 1500);
+        }
       },
       error: (err) => {
         this.loading = false;

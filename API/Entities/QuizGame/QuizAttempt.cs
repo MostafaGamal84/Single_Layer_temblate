@@ -12,6 +12,8 @@ public class QuizAttempt : BaseEntity
     public bool IsFinished { get; set; }
     public int TotalScore { get; set; }
     public int CurrentQuestionIndex { get; set; }
+    public DateTime? TimerStartedAt { get; set; }
+    public int? ElapsedSeconds { get; set; }
     public virtual Quiz Quiz { get; set; } = null!;
     public virtual ICollection<QuizAttemptAnswer> Answers { get; set; } = new List<QuizAttemptAnswer>();
 }

@@ -18,15 +18,26 @@ export interface AuthResponse {
   email: string;
   token: string;
   roles: string[];
+  status: number;
+}
+
+export enum UserStatus {
+  Pending = 0,
+  Active = 1,
+  Suspended = 2
 }
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly tokenKey = 'quiz_token';
   private readonly roleKey = 'quiz_role';
+  private readonly userIdKey = 'quiz_user_id';
+  private readonly statusKey = 'quiz_status';
   private readonly isBrowser: boolean;
   readonly token = signal<string | null>(null);
   readonly role = signal<string | null>(null);
+  readonly userId = signal<number | null>(null);
+  readonly status = signal<number>(1);
 
   constructor(
     private http: HttpClient,
@@ -36,10 +47,14 @@ export class AuthService {
     this.isBrowser = isPlatformBrowser(platformId);
     const storedToken = this.readStorage(this.tokenKey);
     const storedRole = this.readStorage(this.roleKey);
+    const storedUserId = this.readStorage(this.userIdKey);
+    const storedStatus = this.readStorage(this.statusKey);
     const hasValidStoredToken = !!storedToken && !this.isTokenExpired(storedToken);
 
     this.token.set(hasValidStoredToken ? storedToken : null);
     this.role.set(hasValidStoredToken ? storedRole : null);
+    this.userId.set(storedUserId ? parseInt(storedUserId, 10) : null);
+    this.status.set(storedStatus ? parseInt(storedStatus, 10) : 1);
 
     if (storedToken && !hasValidStoredToken) {
       this.clearSession();
@@ -59,7 +74,7 @@ export class AuthService {
       tap((res) => {
         const token = (res as any)?.token ?? (res as any)?.Token;
         if (token) {
-          this.setSession(token, this.pickRoleFromResponse(res));
+          this.setSession(token, this.pickRoleFromResponse(res), (res as any)?.id, (res as any)?.status);
         }
       })
     );
@@ -70,13 +85,13 @@ export class AuthService {
       tap((res) => {
         const token = (res as any)?.token ?? (res as any)?.Token;
         if (token) {
-          this.setSession(token, this.pickRoleFromResponse(res));
+          this.setSession(token, this.pickRoleFromResponse(res), (res as any)?.id, (res as any)?.status);
         }
       })
     );
   }
 
-  setSession(token: string, roleFromResponse?: string | null): void {
+  setSession(token: string, roleFromResponse?: string | null, userId?: number, status?: number): void {
     this.writeStorage(this.tokenKey, token);
     this.token.set(token);
 
@@ -88,13 +103,27 @@ export class AuthService {
       this.removeStorage(this.roleKey);
       this.role.set(null);
     }
+
+    if (userId) {
+      this.writeStorage(this.userIdKey, String(userId));
+      this.userId.set(userId);
+    }
+
+    if (status !== undefined) {
+      this.writeStorage(this.statusKey, String(status));
+      this.status.set(status);
+    }
   }
 
   logout(): void {
     this.removeStorage(this.tokenKey);
     this.removeStorage(this.roleKey);
+    this.removeStorage(this.userIdKey);
+    this.removeStorage(this.statusKey);
     this.token.set(null);
     this.role.set(null);
+    this.userId.set(null);
+    this.status.set(1);
     this.router.navigate(['/auth/login']);
   }
 
@@ -110,6 +139,10 @@ export class AuthService {
     }
 
     return true;
+  }
+
+  isPending(): boolean {
+    return this.status() === 0;
   }
 
   private extractRole(token: string): string | null {
@@ -179,8 +212,12 @@ export class AuthService {
   private clearSession(): void {
     this.removeStorage(this.tokenKey);
     this.removeStorage(this.roleKey);
+    this.removeStorage(this.userIdKey);
+    this.removeStorage(this.statusKey);
     this.token.set(null);
     this.role.set(null);
+    this.userId.set(null);
+    this.status.set(1);
   }
 }
 

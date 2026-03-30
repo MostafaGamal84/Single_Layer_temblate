@@ -4,6 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EditorModule } from 'primeng/editor';
 import { QuestionService } from '../../core/services/question.service';
+import { QuizService } from '../../core/services/quiz.service';
+import { QuestionCategoryService, QuestionCategory } from '../../core/services/question-category.service';
+import { ToastService } from '../../core/services/toast.service';
 import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
 import { forkJoin, of, switchMap } from 'rxjs';
 
@@ -62,6 +65,47 @@ type EditableChoice = {
           <input id="question-difficulty" name="questionDifficulty" [(ngModel)]="model.difficulty" placeholder="Easy / Medium / Hard" />
         </div>
 
+        <div class="field">
+          <label for="question-category-input">Category (optional)</label>
+          <div class="category-selector">
+            @if (selectedCategoryName) {
+              <div class="selected-category">
+                <span class="category-name">{{ selectedCategoryName }}</span>
+                <button type="button" class="remove-btn" (click)="removeCategory()">×</button>
+              </div>
+            } @else {
+              <input
+                id="question-category-input"
+                name="questionCategoryInput"
+                [(ngModel)]="categoryInput"
+                placeholder="Type category name..."
+                list="category-suggestions"
+                (keydown.enter)="addCategoryFromInput($event)"
+                (blur)="addCategoryOnBlur()" />
+              <datalist id="category-suggestions">
+                @for (cat of categories; track cat.id) {
+                  <option [value]="cat.name"></option>
+                }
+              </datalist>
+            }
+            @if (!selectedCategoryName) {
+              <button type="button" class="secondary btn-sm" (click)="addCategoryFromInput()">Add</button>
+            }
+          </div>
+          @if (categories.length > 0 && !selectedCategoryName) {
+            <div class="category-suggestions">
+              <span class="suggestion-label">Or choose existing:</span>
+              <div class="suggestion-chips">
+                @for (cat of categories; track cat.id) {
+                  <button type="button" class="chip" (click)="selectCategory(cat)">
+                    {{ cat.name }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
         <div class="field span-2">
           <label for="question-image">Image (optional)</label>
           <input id="question-image" name="questionImage" type="file" accept="image/png,image/jpeg,image/webp" (change)="onImageSelected($event)" />
@@ -76,7 +120,8 @@ type EditableChoice = {
             styleClass="question-editor"
             [style]="{ height: '320px' }"
             [formats]="editorFormats"
-            placeholder="Write the question exactly as students should see it">
+            placeholder="Write the question exactly as students should see it"
+            (onInit)="onEditorInit($event)">
             <ng-template pTemplate="header">
               <span class="ql-formats">
                 <select class="ql-header" aria-label="Text style">
@@ -337,6 +382,100 @@ type EditableChoice = {
         border-radius: 14px;
       }
     }
+
+    .category-selector {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .category-selector input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      min-height: 44px;
+      font-size: 0.95rem;
+    }
+
+    .selected-category {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--primary-tint);
+      border: 1px solid var(--primary-border);
+      border-radius: 10px;
+      min-height: 44px;
+    }
+
+    .selected-category .category-name {
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .selected-category .remove-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--primary-border);
+      background: var(--surface);
+      color: var(--primary);
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .selected-category .remove-btn:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    .category-suggestions {
+      margin-top: 10px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .suggestion-label {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .suggestion-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      color: var(--text);
+      box-shadow: none;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .chip:hover {
+      border-color: var(--primary-border);
+      background: var(--primary-tint);
+    }
+
+    .btn-sm {
+      padding: 8px 14px;
+      font-size: 0.85rem;
+    }
   `]
 })
 export class QuestionFormComponent implements OnInit {
@@ -346,6 +485,8 @@ export class QuestionFormComponent implements OnInit {
   shortAnswerKey = '';
   questionMode: QuestionMode = 'single';
   imagePreviewUrl = '';
+  targetQuizId?: number;
+  categories: QuestionCategory[] = [];
   private nextChoiceKey = 1;
   private selectedImageFile: File | null = null;
   private selectedChoiceImageFiles = new Map<string, File>();
@@ -360,18 +501,29 @@ export class QuestionFormComponent implements OnInit {
     explanation: '',
     points: 100,
     answerSeconds: 30,
+    categoryId: null,
     choices: this.createDefaultChoices()
   };
+
+  categoryInput = '';
+  selectedCategoryName = '';
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private service: QuestionService
+    private service: QuestionService,
+    private quizService: QuizService,
+    private categoryService: QuestionCategoryService,
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
     const rawId = this.route.snapshot.paramMap.get('id');
     this.id = rawId ? Number(rawId) : undefined;
+    this.targetQuizId = Number(this.route.snapshot.queryParamMap.get('quizId')) || undefined;
+    
+    this.loadCategories();
+
     if (!this.id) {
       this.applyQuestionMode();
       return;
@@ -387,11 +539,77 @@ export class QuestionFormComponent implements OnInit {
       };
       this.questionMode = this.resolveQuestionMode(res);
       this.imagePreviewUrl = res.imageUrl || '';
+      if (res.categoryId) {
+        this.model.categoryId = res.categoryId;
+        const cat = this.categories.find(c => c.id === res.categoryId);
+        this.selectedCategoryName = cat?.name || res.categoryName || '';
+      }
       if (this.questionMode === 'short') {
         this.shortAnswerKey = this.model.choices?.find((item: any) => item.isCorrect)?.choiceText || '';
       }
       this.applyQuestionMode(false);
     });
+  }
+
+  loadCategories(): void {
+    this.categoryService.getAll().subscribe({
+      next: (cats) => {
+        this.categories = cats;
+        if (this.model.categoryId) {
+          const cat = cats.find(c => c.id === this.model.categoryId);
+          this.selectedCategoryName = cat?.name || '';
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  addCategoryFromInput(event?: Event): void {
+    event?.preventDefault();
+    const value = String(this.categoryInput || '').trim();
+    if (!value) return;
+
+    const existing = this.categories.find(c => c.name.toLowerCase() === value.toLowerCase());
+    if (existing) {
+      this.model.categoryId = existing.id;
+      this.selectedCategoryName = existing.name;
+    } else {
+      this.categoryService.create({ name: value }).subscribe({
+        next: (newCat: QuestionCategory) => {
+          this.categories = [...this.categories, newCat];
+          this.model.categoryId = newCat.id;
+          this.selectedCategoryName = newCat.name;
+        },
+        error: () => {}
+      });
+    }
+
+    this.categoryInput = '';
+  }
+
+  handleCategorySeparators(event: KeyboardEvent): void {
+    if (event.key === ',') {
+      event.preventDefault();
+      this.addCategoryFromInput();
+    }
+  }
+
+  removeCategory(): void {
+    this.model.categoryId = null;
+    this.selectedCategoryName = '';
+    this.categoryInput = '';
+  }
+
+  selectCategory(cat: QuestionCategory): void {
+    this.model.categoryId = cat.id;
+    this.selectedCategoryName = cat.name;
+    this.categoryInput = '';
+  }
+
+  addCategoryOnBlur(): void {
+    const value = String(this.categoryInput || '').trim();
+    if (!value) return;
+    this.addCategoryFromInput();
   }
 
   applyQuestionMode(resetChoices = true): void {
@@ -516,6 +734,8 @@ export class QuestionFormComponent implements OnInit {
       explanation: this.model.explanation || null,
       points: this.model.points,
       answerSeconds: this.model.answerSeconds,
+      categoryId: this.model.categoryId || null,
+      quizId: this.targetQuizId || null,
       choices: (this.model.choices || []).map((choice: EditableChoice) => ({
         id: Number(choice.id ?? 0),
         choiceText: String(choice.choiceText || '').trim(),
@@ -553,12 +773,33 @@ export class QuestionFormComponent implements OnInit {
           }
         }
 
-        return uploadRequests.length ? forkJoin(uploadRequests).pipe(switchMap(() => of(question))) : of(question);
+        if (uploadRequests.length) {
+          return forkJoin(uploadRequests).pipe(switchMap(() => of(question)));
+        }
+        return of(question);
+      }),
+      switchMap((question: any) => {
+        const questionId = Number(question?.id ?? this.id ?? 0);
+        if (!questionId || !this.targetQuizId || this.id) {
+          return of(question);
+        }
+        return this.quizService.addQuestions(this.targetQuizId, [{
+          questionId: questionId,
+          order: 1,
+          pointsOverride: null,
+          answerSeconds: null
+        }]).pipe(
+          switchMap(() => of(question))
+        );
       })
     ).subscribe({
       next: () => {
         this.loading = false;
-        this.router.navigate(['/questions']);
+        if (this.targetQuizId && !this.id) {
+          this.router.navigate(['/quizzes', this.targetQuizId]);
+        } else {
+          this.router.navigate(['/questions']);
+        }
       },
       error: (err) => {
         this.loading = false;
@@ -568,7 +809,11 @@ export class QuestionFormComponent implements OnInit {
   }
 
   goBack(): void {
-    this.router.navigate(['/questions']);
+    if (this.targetQuizId) {
+      this.router.navigate(['/quizzes', this.targetQuizId]);
+    } else {
+      this.router.navigate(['/questions']);
+    }
   }
 
   usesSingleCorrect(): boolean {
@@ -654,6 +899,48 @@ export class QuestionFormComponent implements OnInit {
 
   hasMeaningfulRichText(value: string | null | undefined): boolean {
     return this.extractPlainText(value).length > 0;
+  }
+
+  onEditorInit(quill: any): void {
+    this.quillInstance = quill;
+
+    quill.root.addEventListener('paste', (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          this.showImagePasteError();
+          return;
+        }
+      }
+    });
+
+    quill.root.addEventListener('drop', (e: DragEvent) => {
+      const files = e.dataTransfer?.files;
+      if (!files) return;
+
+      for (const file of Array.from(files)) {
+        if (file.type.startsWith('image/')) {
+          e.preventDefault();
+          this.showImagePasteError();
+          return;
+        }
+      }
+    });
+
+    quill.clipboard.addMatcher('IMG', () => {
+      this.showImagePasteError();
+      return new quill.constructor.Immutable('');
+    });
+  }
+
+  private quillInstance: any;
+
+  private showImagePasteError(): void {
+    this.toast.error('لا يمكن لصق صور في محرر النص. استخدم زر "Image" في الأعلى لرفع الصور.');
+    this.quillInstance?.root?.blur();
   }
 
   private resolveQuestionMode(question: any): QuestionMode {
