@@ -10,17 +10,6 @@ export const routes: Routes = [
   { path: 'auth/pending-status', loadComponent: () => import('./features/auth/pending-status.component').then((m) => m.PendingStatusComponent) },
 
   {
-    path: 'questions',
-    canActivate: [authGuard, pendingStatusGuard, roleGuard],
-    data: { roles: ['Admin', 'Host'] },
-    children: [
-      { path: '', loadComponent: () => import('./features/questions/question-bank.component').then((m) => m.QuestionBankComponent) },
-      { path: 'new', loadComponent: () => import('./features/questions/question-form.component').then((m) => m.QuestionFormComponent) },
-      { path: ':id/edit', loadComponent: () => import('./features/questions/question-form.component').then((m) => m.QuestionFormComponent) }
-    ]
-  },
-
-  {
     path: 'quizzes',
     canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Admin', 'Host'] },

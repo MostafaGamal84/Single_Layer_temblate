@@ -31,13 +31,6 @@
 
       <nav class="sidebar-menu">
         @if (auth.role() === 'Admin' || auth.role() === 'Host') {
-          <a routerLink="/questions" routerLinkActive="active" (click)="closeSidebar()">
-            <i class="pi pi-book nav-icon" aria-hidden="true"></i>
-            <span class="nav-copy">
-              <span>Question Bank</span>
-              <small>Craft and refine your library</small>
-            </span>
-          </a>
           <a routerLink="/quizzes" routerLinkActive="active" (click)="closeSidebar()">
             <i class="pi pi-objects-column nav-icon" aria-hidden="true"></i>
             <span class="nav-copy">

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { QuizService } from '../../core/services/quiz.service';
 import { ConfirmDialogService } from '../../core/services/confirm-dialog.service';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   standalone: true,
@@ -15,7 +16,13 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
           <p class="eyebrow">Test Library</p>
           <h2>Tests</h2>
         </div>
-        <a routerLink="/quizzes/new"><button type="button">New Test</button></a>
+        <div class="head-actions">
+          <label class="import-btn">
+            <input type="file" accept=".xlsx,.xls" (change)="onFileSelected($event)" hidden />
+            <span>Import Excel</span>
+          </label>
+          <a routerLink="/quizzes/new"><button type="button">New Test</button></a>
+        </div>
       </div>
 
       <div class="filters-grid">
@@ -62,6 +69,7 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
                 <td>{{ marksLabel(quiz) }}</td>
                 <td>{{ quiz.isPublished ? 'Published' : 'Draft' }}</td>
                 <td class="table-actions">
+                  <button type="button" class="secondary" (click)="exportQuiz(quiz.id)">Export</button>
                   <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Builder</button></a>
                   <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
                   <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
@@ -101,6 +109,7 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
             </div>
 
             <div class="mobile-actions">
+              <button type="button" class="secondary" (click)="exportQuiz(quiz.id)">Export</button>
               <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Builder</button></a>
               <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
               <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
@@ -123,6 +132,31 @@ import { ConfirmDialogService } from '../../core/services/confirm-dialog.service
       justify-content: space-between;
       gap: 10px;
       flex-wrap: wrap;
+    }
+
+    .head-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .import-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .import-btn:hover {
+      background: var(--surface-soft);
     }
 
     .list-head h2 {
@@ -281,8 +315,13 @@ export class QuizzesListComponent implements OnInit {
   category = '';
   published: boolean | null = null;
   error = '';
+  selectedFile: File | null = null;
 
-  constructor(private service: QuizService, private confirmDialog: ConfirmDialogService) {}
+  constructor(
+    private service: QuizService,
+    private confirmDialog: ConfirmDialogService,
+    private toast: ToastService
+  ) {}
 
   ngOnInit(): void {
     this.load();
@@ -293,6 +332,34 @@ export class QuizzesListComponent implements OnInit {
     this.service.getAll({ search: this.search, category: this.category, isPublished: this.published, mode: 1 }).subscribe({
       next: (res: any) => this.items = res.items || [],
       error: (err) => this.error = err?.error?.message || 'Failed to load tests'
+    });
+  }
+
+  exportQuiz(id: number): void {
+    this.service.exportQuiz(id).subscribe({
+      next: () => this.toast.show('Quiz exported successfully', 'success'),
+      error: (err) => this.toast.show(err?.error?.message || 'Export failed', 'error')
+    });
+  }
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.selectedFile = input.files[0];
+      this.importQuiz();
+    }
+  }
+
+  importQuiz(): void {
+    if (!this.selectedFile) return;
+
+    this.service.importQuiz(this.selectedFile).subscribe({
+      next: (res) => {
+        this.toast.show(res.message || 'Quiz imported successfully', 'success');
+        this.load();
+        this.selectedFile = null;
+      },
+      error: (err) => this.toast.show(err?.error?.message || 'Import failed', 'error')
     });
   }
 

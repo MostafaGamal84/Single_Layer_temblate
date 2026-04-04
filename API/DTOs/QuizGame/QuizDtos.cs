@@ -74,3 +74,74 @@ public class QuizQueryDto : PagedRequestDto
     public bool? IsPublished { get; set; }
     public string? Category { get; set; }
 }
+
+public class QuizExportDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Mode { get; set; } = string.Empty;
+    public int DurationMinutes { get; set; }
+    public int? TotalMarks { get; set; }
+    public int MaxAttempts { get; set; } = 1;
+    public List<QuestionExportDto> Questions { get; set; } = new();
+}
+
+public class QuestionExportDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string? SelectionMode { get; set; }
+    public string? Difficulty { get; set; }
+    public string? Explanation { get; set; }
+    public int Points { get; set; }
+    public int AnswerSeconds { get; set; }
+    public string? CategoryName { get; set; }
+    public List<ChoiceExportDto> Choices { get; set; } = new();
+}
+
+public class ChoiceExportDto
+{
+    public string ChoiceText { get; set; } = string.Empty;
+    public bool IsCorrect { get; set; }
+    public int Order { get; set; }
+}
+
+public class QuizImportDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Mode { get; set; } = "Test";
+    public int DurationMinutes { get; set; } = 30;
+    public int? TotalMarks { get; set; }
+    public int MaxAttempts { get; set; } = 1;
+    public List<QuestionImportDto> Questions { get; set; } = new();
+}
+
+public class QuestionImportDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public string Type { get; set; } = "MultipleChoice";
+    public string? SelectionMode { get; set; }
+    public string? Difficulty { get; set; }
+    public string? Explanation { get; set; }
+    public int Points { get; set; } = 1;
+    public int AnswerSeconds { get; set; } = 30;
+    public string? CategoryName { get; set; }
+    public List<ChoiceImportDto> Choices { get; set; } = new();
+}
+
+public class ChoiceImportDto
+{
+    public string ChoiceText { get; set; } = string.Empty;
+    public bool IsCorrect { get; set; }
+    public int Order { get; set; }
+}
+
+public class ImportResultDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int QuizId { get; set; }
+}

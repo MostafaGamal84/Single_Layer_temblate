@@ -57,6 +57,25 @@ export class QuizService {
   reorderQuestions(id: number, payload: any[]) { return this.http.put(`${this.base}/${id}/questions/reorder`, payload); }
   publish(id: number, isPublished: boolean) { return this.http.put(`${this.base}/${id}/publish`, { isPublished }); }
 
+  exportQuiz(id: number) {
+    return this.http.get(`${this.base}/${id}/export`, { responseType: 'blob' }).pipe(
+      map((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `quiz_${id}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+    );
+  }
+
+  importQuiz(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<any>(`${this.base}/import`, formData);
+  }
+
   private toArray(value: any): any[] {
     if (Array.isArray(value)) return value;
     if (value && Array.isArray(value.$values)) return value.$values;

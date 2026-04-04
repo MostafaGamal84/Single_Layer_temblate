@@ -213,7 +213,7 @@ export class RegisterComponent {
           this.success = '';
         } else {
           this.success = 'Registration successful';
-          const redirectPath = this.role === 'Player' ? '/player/history' : '/questions';
+          const redirectPath = this.role === 'Player' ? '/player/history' : '/quizzes';
           setTimeout(() => this.router.navigate([redirectPath]), 1500);
         }
       },

@@ -12,10 +12,12 @@ namespace API.Controllers.QuizGame;
 public class QuizzesController : ControllerBase
 {
     private readonly IQuizService _service;
+    private readonly IQuizImportExportService _importExportService;
 
-    public QuizzesController(IQuizService service)
+    public QuizzesController(IQuizService service, IQuizImportExportService importExportService)
     {
         _service = service;
+        _importExportService = importExportService;
     }
 
     [Authorize(Roles = "Admin,Host")]
@@ -123,5 +125,55 @@ public class QuizzesController : ControllerBase
     {
         var ok = await _service.PublishAsync(id, dto.IsPublished);
         return ok ? Ok(new { message = dto.IsPublished ? "Quiz published" : "Quiz unpublished" }) : NotFound(new { message = "Quiz not found" });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpGet("{id:int}/export")]
+    public async Task<IActionResult> ExportQuiz(int id)
+    {
+        try
+        {
+            var excelData = await _importExportService.ExportQuizToExcelAsync(id);
+            return File(excelData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"quiz_{id}.xlsx");
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportQuiz(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Please select an Excel file" });
+        }
+
+        var allowedExtensions = new[] { ".xlsx", ".xls" };
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Only Excel files (.xlsx, .xls) are allowed" });
+        }
+
+        try
+        {
+            using var memoryStream = new MemoryStream();
+            await file.CopyToAsync(memoryStream);
+            var result = await _importExportService.ImportQuizFromExcelAsync(memoryStream.ToArray(), User.GetUserId());
+
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return CreatedAtAction(nameof(GetById), new { id = result.QuizId }, result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = $"Import failed: {ex.Message}" });
+        }
     }
 }
