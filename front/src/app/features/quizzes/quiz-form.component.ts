@@ -3,106 +3,202 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { QuizService } from '../../core/services/quiz.service';
+import { ToastService } from '../../core/services/toast.service';
+import { QuizQuestionsComponent } from './quiz-questions.component';
+import { QuizAccessComponent } from './quiz-access.component';
 import { of, switchMap } from 'rxjs';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, QuizQuestionsComponent, QuizAccessComponent],
   template: `
     <div class="card test-form-card">
       <div class="form-head">
         <div>
           <p class="eyebrow">Test Builder</p>
           <h2>{{ id ? 'Edit Test' : 'Create Test' }}</h2>
-          <p class="intro-copy">Define the test shell first. Questions, reuse rules, and sessions are managed after this step.</p>
         </div>
         <button type="button" class="secondary" (click)="cancel()">Back</button>
       </div>
 
-      <div class="form-grid">
-        <div class="field span-2">
-          <label for="test-title">Title</label>
-          <input id="test-title" name="testTitle" [(ngModel)]="model.title" placeholder="Unit 1 Midterm" />
+      <div class="stepper">
+        <div class="stepper-progress">
+          <div class="stepper-bar" [style.width.%]="(currentStep / 4) * 100"></div>
         </div>
-
-        <div class="field span-2">
-          <label for="test-description">Description</label>
-          <textarea id="test-description" name="testDescription" rows="4" [(ngModel)]="model.description" placeholder="What this test covers, instructions, or reuse notes"></textarea>
-        </div>
-
-        <div class="field">
-          <label for="test-duration">Duration (minutes)</label>
-          <input id="test-duration" name="testDurationMinutes" type="number" min="0" [(ngModel)]="model.durationMinutes" placeholder="60" />
-        </div>
-
-        <div class="field">
-          <label for="test-total-marks">Total marks (optional)</label>
-          <input id="test-total-marks" name="testTotalMarks" type="number" min="0" [(ngModel)]="model.totalMarks" placeholder="Auto-calculate if empty" />
-        </div>
-
-        <div class="field">
-          <label for="test-status">Status</label>
-          <select id="test-status" name="testStatus" [(ngModel)]="model.isPublished">
-            <option [ngValue]="false">Draft</option>
-            <option [ngValue]="true">Published</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="test-cover-image">Cover image</label>
-          <input id="test-cover-image" name="testCoverImage" type="file" accept="image/png,image/jpeg,image/webp" (change)="onCoverFileSelected($event)" />
-          <small class="inline-note">Allowed: JPG, PNG, WEBP up to 5 MB.</small>
-        </div>
-
-        <div class="field span-2">
-          <label for="test-category-input">Categories</label>
-          <div class="category-entry">
-            <input
-              id="test-category-input"
-              name="testCategoryInput"
-              [(ngModel)]="categoryInput"
-              placeholder="Type a category and press Enter"
-              (keydown.enter)="addCategoryFromInput($event)"
-              (keydown)="handleCategorySeparators($event)" />
-            <button type="button" class="secondary" (click)="addCategoryFromInput()">Add</button>
-          </div>
-          <small class="inline-note">Each test should belong to one or more categories for filtering and session search.</small>
+        <div class="stepper-steps">
+          <button type="button" class="stepper-step" [class.active]="currentStep >= 1" [class.current]="currentStep === 1" (click)="goToStep(1)">
+            <span class="step-number">1</span>
+            <span class="step-label">Basic Info</span>
+          </button>
+          <button type="button" class="stepper-step" [class.active]="currentStep >= 2" [class.current]="currentStep === 2" (click)="goToStep(2)">
+            <span class="step-number">2</span>
+            <span class="step-label">Settings</span>
+          </button>
+          <button type="button" class="stepper-step" [class.active]="currentStep >= 3" [class.current]="currentStep === 3" (click)="goToStep(3)">
+            <span class="step-number">3</span>
+            <span class="step-label">Access</span>
+          </button>
+          <button type="button" class="stepper-step" [class.active]="currentStep >= 4" [class.current]="currentStep === 4" (click)="goToStep(4)">
+            <span class="step-number">4</span>
+            <span class="step-label">Questions</span>
+          </button>
         </div>
       </div>
 
-      @if (model.categories.length) {
-        <div class="category-chip-grid">
-          @for (category of model.categories; track category) {
-            <button type="button" class="chip chip-selected" (click)="removeCategory(category)">
-              {{ category }}
-              <span>Remove</span>
-            </button>
+      @if (currentStep === 1) {
+        <div class="step-content">
+          <h3>Basic Information</h3>
+          <div class="form-grid">
+            <div class="field span-2">
+              <label for="test-title">Title *</label>
+              <input id="test-title" name="testTitle" [(ngModel)]="model.title" placeholder="Unit 1 Midterm" />
+            </div>
+
+            <div class="field span-2">
+              <label for="test-description">Description</label>
+              <textarea id="test-description" name="testDescription" rows="3" [(ngModel)]="model.description" placeholder="What this test covers"></textarea>
+            </div>
+
+            <div class="field">
+              <label for="test-category-input">Categories *</label>
+              <div class="category-entry">
+                <input
+                  id="test-category-input"
+                  name="testCategoryInput"
+                  [(ngModel)]="categoryInput"
+                  placeholder="Type category and press Enter"
+                  (keydown.enter)="addCategoryFromInput($event)" />
+                <button type="button" class="secondary" (click)="addCategoryFromInput()">Add</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>&nbsp;</label>
+              <button type="button" class="secondary" (click)="showCategorySuggestions = !showCategorySuggestions">
+                {{ showCategorySuggestions ? 'Hide' : 'Show' }} Existing Categories
+              </button>
+            </div>
+          </div>
+
+          @if (model.categories.length) {
+            <div class="category-chip-grid">
+              @for (category of model.categories; track category) {
+                <button type="button" class="chip chip-selected" (click)="removeCategory(category)">
+                  {{ category }} <span>×</span>
+                </button>
+              }
+            </div>
+          }
+
+          @if (showCategorySuggestions && suggestedCategoryList.length) {
+            <div class="suggestion-block">
+              <span class="suggestion-label">Existing categories</span>
+              <div class="category-chip-grid">
+                @for (category of suggestedCategoryList; track category) {
+                  <button type="button" class="chip" (click)="applySuggestedCategory(category)">{{ category }}</button>
+                }
+              </div>
+            </div>
           }
         </div>
       }
 
-      @if (suggestedCategoryList.length) {
-        <div class="suggestion-block">
-          <span class="suggestion-label">Existing categories</span>
-          <div class="category-chip-grid">
-            @for (category of suggestedCategoryList; track category) {
-              <button type="button" class="chip" (click)="applySuggestedCategory(category)">{{ category }}</button>
-            }
+      @if (currentStep === 2) {
+        <div class="step-content">
+          <h3>Test Settings</h3>
+          <div class="form-grid">
+            <div class="field">
+              <label for="test-duration">Duration (minutes)</label>
+              <input id="test-duration" name="testDurationMinutes" type="number" min="0" [(ngModel)]="model.durationMinutes" placeholder="60" />
+              <small class="inline-note">0 or empty = no limit</small>
+            </div>
+
+            <div class="field">
+              <label for="test-total-marks">Total marks</label>
+              <input id="test-total-marks" name="testTotalMarks" type="number" min="0" [(ngModel)]="model.totalMarks" placeholder="Auto" />
+            </div>
+
+            <div class="field">
+              <label for="test-status">Status</label>
+              <select id="test-status" name="testStatus" [(ngModel)]="model.isPublished">
+                <option [ngValue]="false">Draft</option>
+                <option [ngValue]="true">Published</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="test-cover-image">Cover Image</label>
+              <input id="test-cover-image" name="testCoverImage" type="file" accept="image/*" (change)="onCoverFileSelected($event)" />
+            </div>
+          </div>
+
+          @if (coverPreviewUrl) {
+            <div class="cover-preview">
+              <img [src]="coverPreviewUrl" alt="Cover preview" class="preview-image" />
+              <button type="button" class="secondary" (click)="removeCoverImage()">Remove</button>
+            </div>
+          }
+
+          <div class="step-2-actions" style="margin-top: 20px; display: flex; gap: 12px; align-items: center;">
+            <button 
+              type="button" 
+              (click)="saveAndGoToStep(3)" 
+              [disabled]="saving || isStepIncomplete(2)">
+              {{ saving ? 'Saving...' : 'Next: Access Settings' }}
+            </button>
           </div>
         </div>
       }
 
-      @if (coverPreviewUrl) {
-        <div class="cover-preview">
-          <span class="suggestion-label">Cover preview</span>
-          <img [src]="coverPreviewUrl" alt="Test cover preview" class="preview-image" />
+      @if (currentStep === 3) {
+        <div class="step-content">
+          <h3>Access Settings</h3>
+          @if (id) {
+            <app-quiz-access [quizId]="id" (accessChanged)="onAccessChanged()" (goToQuestions)="saveAndGoToStep(4)"></app-quiz-access>
+          }
+        </div>
+      }
+
+      @if (currentStep === 4) {
+        <div class="step-content">
+          <h3>Questions</h3>
+          <app-quiz-questions
+            [quizId]="id || 0"
+            [quizTitle]="model.title"
+            [questions]="questions"
+            (questionsChanged)="loadQuestions()">
+          </app-quiz-questions>
         </div>
       }
 
       <div class="action-row">
-        <button type="button" [disabled]="loading" (click)="save()">{{ loading ? 'Saving...' : 'Save Test' }}</button>
-        <button type="button" class="secondary" [disabled]="loading" (click)="cancel()">Cancel</button>
+        @if (currentStep > 1) {
+          <button type="button" class="secondary" (click)="prevStep()">Previous</button>
+        }
+        
+        @if (currentStep === 1) {
+          <button 
+            type="button" 
+            (click)="nextStep()" 
+            [disabled]="isStepIncomplete(currentStep)">
+            Next
+          </button>
+        }
+        
+        @if (currentStep === 3) {
+          <button type="button" (click)="saveAndGoToStep(4)" [disabled]="saving">{{ saving ? 'Saving...' : 'Next: Questions' }}</button>
+        }
+
+        @if (currentStep === 4) {
+          <button type="button" class="secondary" (click)="saveAll()" [disabled]="saving">{{ saving ? 'Saving...' : 'Save' }}</button>
+        }
+        
+        <button type="button" class="secondary" (click)="cancel()">Cancel</button>
       </div>
+
+      @if (stepError) {
+        <div class="step-error-message">{{ stepError }}</div>
+      }
 
       @if (error) { <div class="alert">{{ error }}</div> }
     </div>
@@ -111,6 +207,81 @@ import { of, switchMap } from 'rxjs';
     .test-form-card {
       display: grid;
       gap: 16px;
+    }
+
+    .stepper {
+      margin: 16px 0;
+    }
+
+    .stepper-progress {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-bottom: 12px;
+    }
+
+    .stepper-bar {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 2px;
+    }
+
+    .stepper-steps {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .stepper-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: var(--muted);
+    }
+
+    .stepper-step.active {
+      color: var(--text);
+    }
+
+    .stepper-step.current {
+      background: var(--surface-elevated);
+    }
+
+    .step-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+
+    .stepper-step.active .step-number {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: var(--primary-contrast);
+    }
+
+    .step-label {
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .step-content {
+      padding: 16px 0;
+    }
+
+    .step-content h3 {
+      margin: 0 0 16px;
+      color: var(--text);
     }
 
     .form-head {
@@ -150,6 +321,30 @@ import { of, switchMap } from 'rxjs';
       display: grid;
       gap: 10px;
       grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .step-error {
+      color: var(--danger);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .step-error-message {
+      color: var(--danger);
+      background: var(--danger-tint);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border: 1px solid var(--danger-border);
+    }
+
+    .info-text {
+      color: var(--text-soft);
+      font-size: 0.9rem;
+      padding: 12px;
+      background: var(--surface-soft);
+      border-radius: 8px;
     }
 
     .category-chip-grid {
@@ -221,16 +416,50 @@ import { of, switchMap } from 'rxjs';
       .category-entry {
         grid-template-columns: 1fr;
       }
+
+      .tab-nav {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 0;
+        margin-top: 16px;
+      }
+
+      .tab-nav button {
+        padding: 10px 20px;
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .tab-nav button:hover {
+        color: var(--text);
+      }
+
+      .tab-nav button.active {
+        color: var(--text);
+        border-bottom-color: var(--primary);
+      }
     }
   `]
 })
 export class QuizFormComponent implements OnInit {
   id?: number;
   loading = false;
+  saving = false;
   error = '';
   categoryInput = '';
   coverPreviewUrl = '';
   existingCategories: string[] = [];
+  activeTab = 'questions';
+  questions: any[] = [];
+  currentStep = 1;
+  stepError = '';
+  showCategorySuggestions = false;
+  accessSaved = false;
   private selectedCoverFile: File | null = null;
 
   model: any = {
@@ -246,7 +475,8 @@ export class QuizFormComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private service: QuizService
+    private service: QuizService,
+    private toast: ToastService
   ) {}
 
   ngOnInit(): void {
@@ -269,6 +499,14 @@ export class QuizFormComponent implements OnInit {
         categories: (res.categories || []).map((item: any) => String(item?.name ?? '')).filter(Boolean)
       };
       this.coverPreviewUrl = res.coverImageUrl || '';
+      this.questions = res.questions || [];
+    });
+  }
+
+  loadQuestions(): void {
+    if (!this.id) return;
+    this.service.getById(this.id).subscribe((res: any) => {
+      this.questions = res.questions || [];
     });
   }
 
@@ -415,5 +653,255 @@ export class QuizFormComponent implements OnInit {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) return null;
     return Math.floor(parsed);
+  }
+
+  canProceed(): boolean {
+    this.stepError = '';
+    
+    if (this.currentStep === 1) {
+      if (!this.model.title?.trim()) {
+        this.stepError = 'Title is required';
+        return false;
+      }
+      if (this.model.categories.length === 0) {
+        this.stepError = 'At least one category is required';
+        return false;
+      }
+      return true;
+    }
+    
+    if (this.currentStep === 2) {
+      const duration = Number(this.model.durationMinutes);
+      const totalMarks = Number(this.model.totalMarks);
+      
+      if (this.model.durationMinutes && (duration < 0 || duration > 480)) {
+        this.stepError = 'Duration must be between 0 and 480 minutes';
+        return false;
+      }
+      if (this.model.totalMarks && (totalMarks < 0 || !Number.isFinite(totalMarks))) {
+        this.stepError = 'Total marks must be a positive number';
+        return false;
+      }
+      return true;
+    }
+    
+    return true;
+  }
+
+  isStepIncomplete(step: number): boolean {
+    if (step === 1) {
+      return !this.model.title?.trim() || this.model.categories.length === 0;
+    }
+    if (step === 2) {
+      if (this.model.durationMinutes !== null && this.model.durationMinutes !== '') {
+        const duration = Number(this.model.durationMinutes);
+        if (duration < 0 || duration > 480 || isNaN(duration)) return true;
+      }
+      if (this.model.totalMarks !== null && this.model.totalMarks !== '') {
+        const marks = Number(this.model.totalMarks);
+        if (marks < 0 || isNaN(marks)) return true;
+      }
+    }
+    return false;
+  }
+
+  onAccessChanged(): void {
+    this.accessSaved = true;
+  }
+
+  nextStep(): void {
+    if (this.canProceed() && this.currentStep < 4) {
+      this.currentStep++;
+    }
+  }
+
+  saveAndNext(): void {
+    if (this.isStepIncomplete(2)) return;
+    
+    this.saving = true;
+    this.error = '';
+    
+    const payload = {
+      ...this.model,
+      title: String(this.model.title || '').trim(),
+      description: String(this.model.description || '').trim(),
+      totalMarks: this.normalizeOptionalNumber(this.model.totalMarks),
+      durationMinutes: this.normalizeNumber(this.model.durationMinutes, 0),
+      categories: this.model.categories
+    };
+
+    const request$ = this.id ? this.service.update(this.id, payload) : this.service.create(payload);
+    request$.pipe(
+      switchMap((quiz: any) => {
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        if (!this.selectedCoverFile || !quizId) {
+          return of(quiz);
+        }
+        return this.service.uploadCoverImage(quizId, this.selectedCoverFile).pipe(
+          switchMap(() => of(quiz))
+        );
+      })
+    ).subscribe({
+      next: (quiz: any) => {
+        this.saving = false;
+        this.id = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        this.accessSaved = true;
+        this.loadQuestions();
+      },
+      error: (err) => {
+        this.saving = false;
+        this.error = err?.error?.message || 'Failed to save test settings';
+      }
+    });
+  }
+
+  saveAndContinue(): void {
+    this.saveAndNext();
+  }
+
+  saveAndFinish(): void {
+    if (this.isStepIncomplete(2)) return;
+    
+    this.saving = true;
+    this.error = '';
+    
+    const payload = {
+      ...this.model,
+      title: String(this.model.title || '').trim(),
+      description: String(this.model.description || '').trim(),
+      totalMarks: this.normalizeOptionalNumber(this.model.totalMarks),
+      durationMinutes: this.normalizeNumber(this.model.durationMinutes, 0),
+      categories: this.model.categories
+    };
+
+    const request$ = this.id ? this.service.update(this.id, payload) : this.service.create(payload);
+    request$.pipe(
+      switchMap((quiz: any) => {
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        if (!this.selectedCoverFile || !quizId) {
+          return of(quiz);
+        }
+        return this.service.uploadCoverImage(quizId, this.selectedCoverFile).pipe(
+          switchMap(() => of(quiz))
+        );
+      })
+    ).subscribe({
+      next: (quiz: any) => {
+        this.saving = false;
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        this.toast.show('Test saved successfully', 'success');
+        this.router.navigate(quizId ? ['/quizzes', quizId] : ['/quizzes']);
+      },
+      error: (err) => {
+        this.saving = false;
+        this.error = err?.error?.message || 'Failed to save test';
+      }
+    });
+  }
+
+  prevStep(): void {
+    if (this.currentStep > 1) {
+      this.currentStep--;
+    }
+  }
+
+  goToStep(step: number): void {
+    if (step <= this.currentStep || this.id) {
+      this.currentStep = step;
+    }
+  }
+
+  saveAndGoToStep(step: number): void {
+    if (this.isStepIncomplete(2)) return;
+    
+    this.saving = true;
+    this.error = '';
+    
+    const payload = {
+      ...this.model,
+      title: String(this.model.title || '').trim(),
+      description: String(this.model.description || '').trim(),
+      totalMarks: this.normalizeOptionalNumber(this.model.totalMarks),
+      durationMinutes: this.normalizeNumber(this.model.durationMinutes, 0),
+      categories: this.model.categories
+    };
+
+    const request$ = this.id ? this.service.update(this.id, payload) : this.service.create(payload);
+    request$.pipe(
+      switchMap((quiz: any) => {
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        if (!this.selectedCoverFile || !quizId) {
+          return of(quiz);
+        }
+        return this.service.uploadCoverImage(quizId, this.selectedCoverFile).pipe(
+          switchMap(() => of(quiz))
+        );
+      })
+    ).subscribe({
+      next: (quiz: any) => {
+        this.saving = false;
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        this.id = quizId;
+        this.currentStep = step;
+        this.loadQuestions();
+      },
+      error: (err) => {
+        this.saving = false;
+        this.error = err?.error?.message || 'Failed to save test settings';
+      }
+    });
+  }
+
+  removeCoverImage(): void {
+    this.coverPreviewUrl = '';
+    this.selectedCoverFile = null;
+  }
+
+  saveAll(): void {
+    this.error = '';
+
+    if (!this.model.title?.trim()) {
+      this.error = 'Test title is required.';
+      return;
+    }
+
+    if (!this.model.categories.length) {
+      this.error = 'At least one category is required.';
+      return;
+    }
+
+    this.saving = true;
+    const payload = {
+      ...this.model,
+      title: String(this.model.title || '').trim(),
+      description: String(this.model.description || '').trim(),
+      totalMarks: this.normalizeOptionalNumber(this.model.totalMarks),
+      durationMinutes: this.normalizeNumber(this.model.durationMinutes, 0),
+      categories: this.model.categories
+    };
+
+    const request$ = this.id ? this.service.update(this.id, payload) : this.service.create(payload);
+    request$.pipe(
+      switchMap((quiz: any) => {
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        if (!this.selectedCoverFile || !quizId) {
+          return of(quiz);
+        }
+        return this.service.uploadCoverImage(quizId, this.selectedCoverFile).pipe(
+          switchMap(() => of(quiz))
+        );
+      })
+    ).subscribe({
+      next: (quiz: any) => {
+        this.saving = false;
+        const quizId = Number(quiz?.id ?? quiz?.Id ?? this.id ?? 0);
+        this.toast?.show?.('Test saved successfully', 'success');
+        this.router.navigate(quizId ? ['/quizzes', quizId] : ['/quizzes']);
+      },
+      error: (err) => {
+        this.saving = false;
+        this.error = err?.error?.message || 'Failed to save test';
+      }
+    });
   }
 }

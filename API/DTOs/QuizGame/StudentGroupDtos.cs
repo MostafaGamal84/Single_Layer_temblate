@@ -48,6 +48,7 @@ public class StudentListDto
     public string Email { get; set; } = string.Empty;
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
+    public string Role { get; set; } = string.Empty;
     public int Status { get; set; }
     public string StatusName { get; set; } = string.Empty;
     public DateTime RegisterTime { get; set; }
@@ -65,6 +66,7 @@ public class StudentQueryDto : PagedRequestDto
 {
     public int? Status { get; set; }
     public int? GroupId { get; set; }
+    public string? Role { get; set; }
 }
 
 public class UserSummaryDto

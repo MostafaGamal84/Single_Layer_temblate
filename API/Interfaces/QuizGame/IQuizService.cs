@@ -16,4 +16,5 @@ public interface IQuizService
     Task<bool> RemoveQuestionAsync(int quizId, int quizQuestionId);
     Task<bool> ReorderAsync(int quizId, List<QuizQuestionReorderItemDto> items);
     Task<bool> PublishAsync(int quizId, bool isPublished);
+    Task<QuizResponseDto?> DuplicateAsync(int quizId, int userId);
 }

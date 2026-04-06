@@ -176,4 +176,125 @@ public class QuizzesController : ControllerBase
             return BadRequest(new { message = $"Import failed: {ex.Message}" });
         }
     }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("{id:int}/duplicate")]
+    public async Task<IActionResult> DuplicateQuiz(int id)
+    {
+        var result = await _service.DuplicateAsync(id, User.GetUserId());
+        return result is null ? NotFound(new { message = "Quiz not found" }) : CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-duplicate")]
+    public async Task<IActionResult> BulkDuplicate([FromBody] List<int> ids)
+    {
+        if (ids is null || ids.Count == 0)
+        {
+            return BadRequest(new { message = "No IDs provided" });
+        }
+
+        var duplicated = 0;
+        foreach (var id in ids)
+        {
+            var result = await _service.DuplicateAsync(id, User.GetUserId());
+            if (result is not null)
+            {
+                duplicated++;
+            }
+        }
+
+        return Ok(new { message = $"Duplicated {duplicated} quizzes", duplicatedCount = duplicated });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-delete")]
+    public async Task<IActionResult> BulkDelete([FromBody] List<int> ids)
+    {
+        if (ids is null || ids.Count == 0)
+        {
+            return BadRequest(new { message = "No IDs provided" });
+        }
+
+        var deleted = 0;
+        foreach (var id in ids)
+        {
+            if (await _service.DeleteAsync(id))
+            {
+                deleted++;
+            }
+        }
+
+        return Ok(new { message = $"Deleted {deleted} quizzes", deletedCount = deleted });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-publish")]
+    public async Task<IActionResult> BulkPublish([FromBody] BulkActionDto dto)
+    {
+        if (dto.Ids is null || dto.Ids.Count == 0)
+        {
+            return BadRequest(new { message = "No IDs provided" });
+        }
+
+        var updated = 0;
+        foreach (var id in dto.Ids)
+        {
+            if (await _service.PublishAsync(id, dto.Publish))
+            {
+                updated++;
+            }
+        }
+
+        return Ok(new { message = $"Updated {updated} quizzes", updatedCount = updated });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-export")]
+    public async Task<IActionResult> BulkExport([FromBody] List<int> ids)
+    {
+        if (ids is null || ids.Count == 0)
+        {
+            return BadRequest(new { message = "No IDs provided" });
+        }
+
+        try
+        {
+            using var memoryStream = new MemoryStream();
+            using var archive = new System.IO.Compression.ZipArchive(memoryStream, System.IO.Compression.ZipArchiveMode.Create, true);
+
+            foreach (var id in ids)
+            {
+                try
+                {
+                    var excelData = await _importExportService.ExportQuizToExcelAsync(id);
+                    var quiz = await _service.GetByIdAsync(id);
+                    var fileName = $"quiz_{id}_{SanitizeFileName(quiz?.Title ?? "quiz")}.xlsx";
+                    var entry = archive.CreateEntry(fileName);
+                    using var entryStream = entry.Open();
+                    entryStream.Write(excelData, 0, excelData.Length);
+                }
+                catch { }
+            }
+
+            memoryStream.Position = 0;
+            return File(memoryStream.ToArray(), "application/zip", "quizzes_export.zip");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = $"Export failed: {ex.Message}" });
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
+        return string.Join("_", name.Split(invalid, StringSplitOptions.RemoveEmptyEntries)).Trim();
+    }
+}
+
+public class BulkActionDto
+{
+    public List<int> Ids { get; set; } = new();
+    public bool Publish { get; set; }
 }

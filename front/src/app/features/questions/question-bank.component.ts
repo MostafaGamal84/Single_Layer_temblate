@@ -66,6 +66,15 @@ import { PagedResult, Question } from '../../core/models';
         </div>
       }
 
+  @if (selectedQuestions.size > 0) {
+        <div class="bulk-actions-bar">
+          <span>{{ selectedQuestions.size }} selected</span>
+          <button type="button" (click)="bulkExport()">Export</button>
+          <button type="button" (click)="bulkDuplicate()">Duplicate</button>
+          <button type="button" class="danger" (click)="bulkDelete()">Delete</button>
+        </div>
+      }
+
       @if (!loading && questions.length === 0) {
         <div class="empty-state">
           <h4>No questions found</h4>
@@ -263,7 +272,7 @@ import { PagedResult, Question } from '../../core/models';
       gap: 12px;
     }
 
-    .question-row {
+.question-row {
       display: flex;
       gap: 14px;
       align-items: flex-start;
@@ -272,7 +281,6 @@ import { PagedResult, Question } from '../../core/models';
       border: 1px solid var(--border);
       border-radius: 12px;
       cursor: pointer;
-      transition: all 0.15s ease;
     }
 
     .question-row:hover {
@@ -432,7 +440,7 @@ import { PagedResult, Question } from '../../core/models';
 
     .row-actions {
       display: flex;
-      gap: 6px;
+      gap: 12px;
       flex-shrink: 0;
     }
 
@@ -445,6 +453,61 @@ import { PagedResult, Question } from '../../core/models';
     .btn-danger:hover {
       border-color: var(--danger-border);
       color: var(--danger);
+    }
+
+    .bulk-actions-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-actions-bar span {
+      font-weight: 600;
+      color: var(--text);
+      margin-right: auto;
+      min-width: 80px;
+    }
+
+    .bulk-actions-bar button {
+      padding: 10px 18px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      background: var(--surface);
+      color: var(--text);
+      min-width: 80px;
+    }
+
+    .bulk-actions-bar button:hover {
+      background: var(--surface-elevated);
+    }
+
+    .bulk-actions-bar button.danger {
+      background: var(--danger);
+      color: white;
+      border-color: var(--danger);
+    }
+
+    .bulk-actions-bar button.danger:hover {
+      background: #c82333;
+      border-color: #c82333;
+    }
+
+    .bulk-actions-bar button:first-of-type {
+      background: var(--primary);
+      color: var(--primary-contrast);
+      border-color: var(--primary);
+    }
+
+    .bulk-actions-bar button:first-of-type:hover {
+      background: var(--primary-hover);
     }
 
     .pagination {
@@ -707,5 +770,46 @@ export class QuestionBankComponent implements OnInit {
         }
       });
     }
+  }
+
+  clearSelection(): void {
+    this.selectedQuestions.clear();
+  }
+
+  bulkDelete(): void {
+    if (!confirm(`Delete ${this.selectedQuestions.size} questions?`)) return;
+    const ids = Array.from(this.selectedQuestions);
+    this.questionService.bulkDelete(ids).subscribe({
+      next: () => {
+        this.toast.show(`${ids.length} questions deleted`, 'success');
+        this.clearSelection();
+        this.loadQuestions();
+      },
+      error: (err) => this.toast.show(err?.error?.message || 'Bulk delete failed', 'error')
+    });
+  }
+
+  bulkDuplicate(): void {
+    const ids = Array.from(this.selectedQuestions);
+    let completed = 0;
+    ids.forEach(id => {
+      this.questionService.duplicate(id).subscribe({ next: () => completed++, error: () => completed++ });
+    });
+    const checkInterval = setInterval(() => { 
+      if (completed >= ids.length) { 
+        clearInterval(checkInterval); 
+        this.toast.show(`${ids.length} questions duplicated`, 'success'); 
+        this.clearSelection(); 
+        this.loadQuestions(); 
+      } 
+    }, 500);
+  }
+
+  bulkExport(): void {
+    const ids = Array.from(this.selectedQuestions);
+    this.questionService.bulkExportQuestions(ids).subscribe({
+      next: () => this.toast.show(`${ids.length} questions exported`, 'success'),
+      error: () => this.toast.show('Export failed', 'error')
+    });
   }
 }

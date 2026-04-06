@@ -15,4 +15,8 @@ public interface IQuestionService
     Task<string?> UploadChoiceImageAsync(int questionId, int choiceId, IFormFile file);
     Task<List<RandomQuestionResultDto>> GetRandomQuestionsByCategoryAsync(RandomQuestionSelectionRequest request);
     Task<List<QuestionCategory>> GetCategoriesWithQuestionCountsAsync();
+    Task<QuestionResponseDto?> DuplicateAsync(int questionId, int userId);
+    Task<int> ImportFromExcelAsync(IFormFile file);
+    Task<Stream> ExportToExcelAsync(string? search = null, int? type = null, string? difficulty = null);
+    Task<Stream> ExportSelectedToExcelAsync(List<int> ids);
 }

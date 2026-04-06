@@ -22,6 +22,7 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IQuizAccessService, QuizAccessService>();
         services.AddScoped<IQuestionCategoryService, QuestionCategoryService>();
         services.AddScoped<IQuizImportExportService, QuizImportExportService>();
+        services.AddScoped<IUserPermissionService, UserPermissionService>();
         services.AddHostedService<TimedSessionAdvancerHostedService>();
 
         services.AddDbContext<DataContext>(options =>

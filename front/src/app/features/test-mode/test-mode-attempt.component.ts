@@ -2,7 +2,9 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { TestModeService } from '../../core/services/test-mode.service';
+import { AuthService } from '../../core/services/auth.service';
 import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
 import { environment } from '../../../environments/environment';
 
@@ -88,9 +90,31 @@ import { environment } from '../../../environments/environment';
                     <p class="question-kicker">Q{{ questionData.questionIndex + 1 }}</p>
                     <h3>{{ questionData.question.title }}</h3>
                   </div>
-
+                  @if (!isEditMode && canEditQuestion()) {
+                    <button type="button" class="secondary edit-question-btn" (click)="enableEditMode()">
+                      <i class="pi pi-pencil"></i> Edit
+                    </button>
+                  }
 
                 </div>
+
+                @if (isEditMode) {
+                  <div class="edit-question-form card">
+                    <h4>Edit Question</h4>
+                    <div class="field">
+                      <label>Title</label>
+                      <input type="text" [(ngModel)]="editForm.title" class="form-control" />
+                    </div>
+                    <div class="field">
+                      <label>Question Text</label>
+                      <textarea [(ngModel)]="editForm.text" rows="4" class="form-control"></textarea>
+                    </div>
+                    <div class="edit-actions">
+                      <button type="button" class="secondary" (click)="cancelEdit()" [disabled]="isSavingEdit">Cancel</button>
+                      <button type="button" (click)="saveEdit()" [disabled]="isSavingEdit">{{ isSavingEdit ? 'Saving...' : 'Save Changes' }}</button>
+                    </div>
+                  </div>
+                }
 
                 <div class="question-text rich-text-content" [innerHTML]="questionData.question.text | safeRichText"></div>
 
@@ -340,16 +364,10 @@ import { environment } from '../../../environments/environment';
     .stat-box.timer-critical {
       border-color: var(--alert-border);
       background: var(--danger-tint);
-      animation: pulse 1s ease-in-out infinite;
     }
 
     .stat-box.timer-critical strong {
       color: var(--text-danger);
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
     }
 
     .board-head,
@@ -714,13 +732,22 @@ export class TestModeAttemptComponent implements OnInit, OnDestroy {
   currentQuestionIndex = 0;
   selectedChoiceIds: number[] = [];
   textAnswer = '';
+  isEditMode = false;
+  isSavingEdit = false;
+  editForm = { title: '', text: '' };
   private questionsCache: any[] = [];
   private draftChoices = new Map<number, number[]>();
   private draftTexts = new Map<number, string>();
   private timerInterval: any = null;
   remainingSeconds = 0;
 
-  constructor(private route: ActivatedRoute, private service: TestModeService, private router: Router) {}
+  constructor(
+    private route: ActivatedRoute,
+    private service: TestModeService,
+    private router: Router,
+    private http: HttpClient,
+    private auth: AuthService
+  ) {}
 
   ngOnInit(): void {
     this.attemptId = Number(this.route.snapshot.paramMap.get('attemptId'));
@@ -1208,6 +1235,50 @@ export class TestModeAttemptComponent implements OnInit, OnDestroy {
 
     const apiRoot = environment.apiBaseUrl.replace(/\/api\/?$/i, '');
     return raw.startsWith('/') ? `${apiRoot}${raw}` : `${apiRoot}/${raw}`;
+  }
+
+  canEditQuestion(): boolean {
+    return this.auth.hasPermission('EditQuestions');
+  }
+
+  enableEditMode(): void {
+    if (!this.questionData?.question) return;
+    this.editForm = {
+      title: this.questionData.question.title || '',
+      text: this.questionData.question.text || ''
+    };
+    this.isEditMode = true;
+  }
+
+  cancelEdit(): void {
+    this.isEditMode = false;
+    this.editForm = { title: '', text: '' };
+  }
+
+  saveEdit(): void {
+    if (!this.questionData?.question?.id || this.isSavingEdit) return;
+
+    this.isSavingEdit = true;
+    const questionId = this.questionData.question.id;
+    const dto = {
+      title: this.editForm.title,
+      text: this.editForm.text,
+      type: this.questionData.question.type,
+      categoryId: this.questionData.question.categoryId
+    };
+
+    this.http.put(`${environment.apiBaseUrl}/api/questions/${questionId}`, dto).subscribe({
+      next: () => {
+        this.isSavingEdit = false;
+        this.isEditMode = false;
+        this.questionData.question.title = this.editForm.title;
+        this.questionData.question.text = this.editForm.text;
+      },
+      error: () => {
+        this.isSavingEdit = false;
+        this.error = 'Failed to save question changes';
+      }
+    });
   }
 }
 

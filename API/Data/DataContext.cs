@@ -31,6 +31,7 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
     public DbSet<QuizAccess> QuizAccesses => Set<QuizAccess>();
     public DbSet<QuizAccessUser> QuizAccessUsers => Set<QuizAccessUser>();
     public DbSet<QuizAccessGroup> QuizAccessGroups => Set<QuizAccessGroup>();
+    public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -204,5 +205,15 @@ public class DataContext : IdentityDbContext<AppUser, AppRole, int,
 
         builder.Entity<StudentGroup>()
             .HasIndex(x => x.Name);
+
+        builder.Entity<UserPermission>()
+            .HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<UserPermission>()
+            .HasIndex(x => new { x.UserId, x.Permission })
+            .IsUnique();
     }
 }

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { QuestionService } from '../../core/services/question.service';
 import { ConfirmDialogService } from '../../core/services/confirm-dialog.service';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   standalone: true,
@@ -291,7 +292,11 @@ export class QuestionsListComponent implements OnInit {
   total = 0;
   error = '';
 
-  constructor(private service: QuestionService, private confirmDialog: ConfirmDialogService) {}
+  constructor(
+    private service: QuestionService,
+    private confirmDialog: ConfirmDialogService,
+    private toast: ToastService
+  ) {}
 
   ngOnInit(): void { this.load(); }
 
@@ -319,8 +324,14 @@ export class QuestionsListComponent implements OnInit {
     if (!ok) return;
 
     this.service.delete(id).subscribe({
-      next: () => this.load(),
-      error: (err) => this.error = err?.error?.message || 'Delete failed'
+      next: () => {
+        this.load();
+        this.toast.success('Question deleted successfully');
+      },
+      error: (err) => {
+        this.error = err?.error?.message || 'Delete failed';
+        this.toast.error(this.error);
+      }
     });
   }
 

@@ -1,26 +1,42 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { QuizService } from '../../core/services/quiz.service';
+import { AuthService } from '../../core/services/auth.service';
+import { ToastService } from '../../core/services/toast.service';
+import { ConfirmDialogService } from '../../core/services/confirm-dialog.service';
 import { QuizQuestionsComponent } from './quiz-questions.component';
 import { QuizAccessComponent } from './quiz-access.component';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, RouterLink, QuizQuestionsComponent, QuizAccessComponent],
+  imports: [CommonModule, FormsModule, RouterLink, QuizQuestionsComponent, QuizAccessComponent],
   template: `
     <div class="details-shell">
       @if (quiz) {
         <section class="card hero-card">
           <div class="hero-head">
             <div>
-              <p class="eyebrow">Test Builder</p>
-              <h2>{{ quiz.title }}</h2>
-              <p class="hero-copy">{{ quiz.description || 'No description provided yet.' }}</p>
+              <p class="eyebrow">Test Settings</p>
+              @if (isEditingTitle) {
+                <input type="text" [(ngModel)]="editTitle" class="form-control title-input" (blur)="saveTitle()" (keyup.enter)="saveTitle()" />
+              } @else {
+                <h2 (click)="startEditTitle()">{{ quiz.title }}</h2>
+              }
+              @if (isEditingDesc) {
+                <textarea [(ngModel)]="editDesc" class="form-control" rows="2" (blur)="saveDesc()" placeholder="No description"></textarea>
+              } @else {
+                <p class="hero-copy" (click)="startEditDesc()">{{ quiz.description || 'Click to add description' }}</p>
+              }
             </div>
 
             <div class="hero-actions">
-              <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit Test</button></a>
+              <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button">Edit</button></a>
+              <button type="button" (click)="togglePublish()">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
+              @if (auth.hasPermission('DeleteTests')) {
+                <button type="button" class="danger" (click)="deleteQuiz()">Delete</button>
+              }
               <a routerLink="/quizzes"><button type="button" class="secondary">Back</button></a>
             </div>
           </div>
@@ -32,7 +48,11 @@ import { QuizAccessComponent } from './quiz-access.component';
             </div>
             <div class="metric-card">
               <span>Duration</span>
-              <strong>{{ quiz.durationMinutes ? quiz.durationMinutes + ' min' : 'No limit' }}</strong>
+              @if (isEditingDuration) {
+                <input type="number" [(ngModel)]="editDuration" class="form-control duration-input" (blur)="saveDuration()" (keyup.enter)="saveDuration()" min="0" />
+              } @else {
+                <strong (click)="startEditDuration()">{{ quiz.durationMinutes ? quiz.durationMinutes + ' min' : 'No limit' }}</strong>
+              }
             </div>
             <div class="metric-card">
               <span>Questions</span>
@@ -102,10 +122,33 @@ import { QuizAccessComponent } from './quiz-access.component';
       margin: 0;
     }
 
+    .hero-head h2, .hero-head strong, .hero-head .metric-card span {
+      cursor: pointer;
+    }
+
+    .hero-head h2:hover, .hero-head strong:hover {
+      color: var(--primary);
+    }
+
+    .title-input, .duration-input {
+      font-size: inherit;
+      font-weight: inherit;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
+    }
+
     .hero-copy,
     .section-copy {
       margin: 6px 0 0;
       max-width: 64ch;
+      cursor: pointer;
+    }
+
+    .hero-copy:hover {
+      color: var(--text-soft);
     }
 
     .hero-actions,
@@ -159,7 +202,6 @@ import { QuizAccessComponent } from './quiz-access.component';
       cursor: pointer;
       font-weight: 600;
       color: var(--muted);
-      transition: all 0.2s;
     }
 
     .tab-nav button:hover {
@@ -189,15 +231,39 @@ export class QuizDetailsComponent implements OnInit {
   activeTab = 'questions';
   error = '';
   private id = 0;
+  
+  isEditingTitle = false;
+  editTitle = '';
+  isEditingDesc = false;
+  editDesc = '';
+  isEditingDuration = false;
+  editDuration = 0;
 
   constructor(
     private route: ActivatedRoute,
-    private quizService: QuizService
+    private router: Router,
+    private quizService: QuizService,
+    public auth: AuthService,
+    private toast: ToastService,
+    private confirmDialog: ConfirmDialogService
   ) {}
 
   ngOnInit(): void {
     this.id = Number(this.route.snapshot.paramMap.get('id'));
     this.load();
+  }
+
+  async deleteQuiz(): Promise<void> {
+    const ok = await this.confirmDialog.open({ title: 'Delete this test?', message: 'This test will be permanently removed.', confirmText: 'Delete', cancelText: 'Cancel', tone: 'danger' });
+    if (!ok) return;
+    
+    this.quizService.delete(this.id).subscribe({
+      next: () => {
+        this.toast.show('Test deleted', 'success');
+        this.router.navigate(['/quizzes']);
+      },
+      error: () => this.toast.show('Failed to delete test', 'error')
+    });
   }
 
   load(): void {
@@ -220,5 +286,65 @@ export class QuizDetailsComponent implements OnInit {
     const total = Number(this.quiz?.totalMarks ?? 0);
     const effective = Number(this.quiz?.effectiveTotalMarks ?? 0);
     return total > 0 ? `${total}` : `${effective || 0}`;
+  }
+
+  startEditTitle(): void {
+    this.editTitle = this.quiz?.title || '';
+    this.isEditingTitle = true;
+  }
+
+  saveTitle(): void {
+    if (this.editTitle.trim()) {
+      this.quizService.update(this.id, { title: this.editTitle.trim() }).subscribe({
+        next: () => {
+          this.quiz.title = this.editTitle;
+          this.toast.show('Title updated', 'success');
+        },
+        error: () => this.toast.show('Failed to update title', 'error')
+      });
+    }
+    this.isEditingTitle = false;
+  }
+
+  startEditDesc(): void {
+    this.editDesc = this.quiz?.description || '';
+    this.isEditingDesc = true;
+  }
+
+  saveDesc(): void {
+    this.quizService.update(this.id, { description: this.editDesc.trim() }).subscribe({
+      next: () => {
+        this.quiz.description = this.editDesc;
+        this.toast.show('Description updated', 'success');
+      },
+      error: () => this.toast.show('Failed to update description', 'error')
+    });
+    this.isEditingDesc = false;
+  }
+
+  startEditDuration(): void {
+    this.editDuration = this.quiz?.durationMinutes || 0;
+    this.isEditingDuration = true;
+  }
+
+  saveDuration(): void {
+    this.quizService.update(this.id, { durationMinutes: this.editDuration }).subscribe({
+      next: () => {
+        this.quiz.durationMinutes = this.editDuration;
+        this.toast.show('Duration updated', 'success');
+      },
+      error: () => this.toast.show('Failed to update duration', 'error')
+    });
+    this.isEditingDuration = false;
+  }
+
+  togglePublish(): void {
+    this.quizService.togglePublish(this.id).subscribe({
+      next: () => {
+        this.quiz.isPublished = !this.quiz.isPublished;
+        this.toast.show(this.quiz.isPublished ? 'Test published' : 'Test unpublished', 'success');
+      },
+      error: () => this.toast.show('Failed to update status', 'error')
+    });
   }
 }

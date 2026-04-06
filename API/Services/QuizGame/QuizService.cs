@@ -302,6 +302,115 @@ public class QuizService : IQuizService
         return true;
     }
 
+    public async Task<QuizResponseDto?> DuplicateAsync(int quizId, int userId)
+    {
+        var originalQuiz = await _context.Set<Quiz>()
+            .Include(x => x.QuizCategories.Where(qc => !qc.IsDeleted))
+            .Include(x => x.QuizQuestions.Where(q => !q.IsDeleted))
+            .ThenInclude(x => x.Question)
+            .ThenInclude(x => x.Choices.Where(c => !c.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == quizId && !x.IsDeleted);
+
+        if (originalQuiz is null)
+        {
+            return null;
+        }
+
+        var newQuiz = new Quiz
+        {
+            Title = $"{originalQuiz.Title} (Copy)",
+            Description = originalQuiz.Description,
+            Mode = originalQuiz.Mode,
+            DurationMinutes = originalQuiz.DurationMinutes,
+            TotalMarks = originalQuiz.TotalMarks,
+            IsPublished = false,
+            CreatedBy = userId,
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false
+        };
+
+        _context.Set<Quiz>().Add(newQuiz);
+        await _context.SaveChangesAsync();
+
+        foreach (var qc in originalQuiz.QuizCategories)
+        {
+            newQuiz.QuizCategories.Add(new QuizCategory
+            {
+                QuizId = newQuiz.Id,
+                CategoryId = qc.CategoryId,
+                IsDeleted = false
+            });
+        }
+
+        var questionOrder = 1;
+        foreach (var oqq in originalQuiz.QuizQuestions.OrderBy(x => x.Order))
+        {
+            var originalQuestion = oqq.Question;
+            var newQuestion = new Question
+            {
+                Title = originalQuestion.Title,
+                Text = originalQuestion.Text,
+                Type = originalQuestion.Type,
+                SelectionMode = originalQuestion.SelectionMode,
+                Difficulty = originalQuestion.Difficulty,
+                Explanation = originalQuestion.Explanation,
+                Points = originalQuestion.Points,
+                AnswerSeconds = originalQuestion.AnswerSeconds,
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false,
+                CategoryId = originalQuestion.CategoryId
+            };
+
+            foreach (var oc in originalQuestion.Choices.OrderBy(c => c.Order))
+            {
+                newQuestion.Choices.Add(new QuestionChoice
+                {
+                    ChoiceText = oc.ChoiceText,
+                    IsCorrect = oc.IsCorrect,
+                    Order = oc.Order,
+                    IsDeleted = false
+                });
+            }
+
+            _context.Set<Question>().Add(newQuestion);
+            await _context.SaveChangesAsync();
+
+            newQuiz.QuizQuestions.Add(new QuizQuestion
+            {
+                QuestionId = newQuestion.Id,
+                Order = questionOrder++,
+                PointsOverride = oqq.PointsOverride,
+                AnswerSeconds = oqq.AnswerSeconds,
+                IsDeleted = false
+            });
+        }
+
+        var quizAccess = await _context.Set<QuizAccess>()
+            .FirstOrDefaultAsync(x => x.QuizId == quizId && !x.IsDeleted);
+        
+        if (quizAccess is not null)
+        {
+            var newQuizAccess = new QuizAccess
+            {
+                QuizId = newQuiz.Id,
+                ExamMode = quizAccess.ExamMode,
+                AccessType = quizAccess.AccessType,
+                MaxAttempts = quizAccess.MaxAttempts,
+                TimerMinutes = quizAccess.TimerMinutes,
+                IsDeleted = false
+            };
+            _context.Set<QuizAccess>().Add(newQuizAccess);
+        }
+
+        await _context.SaveChangesAsync();
+
+        newQuiz.TotalMarks = newQuiz.QuizQuestions.Sum(qq => qq.PointsOverride ?? qq.Question.Points);
+        await _context.SaveChangesAsync();
+
+        return await GetByIdAsync(newQuiz.Id);
+    }
+
     private QuizResponseDto MapQuizDetails(Quiz quiz)
     {
         return new QuizResponseDto

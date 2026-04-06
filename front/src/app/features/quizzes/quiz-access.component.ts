@@ -58,24 +58,19 @@ import { ToastService } from '../../core/services/toast.service';
             <input id="end-time" type="datetime-local" [(ngModel)]="form.scheduledEndTime" />
           </div>
         </div>
-
-        <div class="form-actions">
-          <button type="button" [disabled]="saving" (click)="saveSettings()">
-            {{ saving ? 'Saving...' : 'Save Settings' }}
-          </button>
-        </div>
       </div>
 
       @if (form.accessType === 2) {
         <div class="users-section">
           <div class="section-header">
             <h4>Individual Students</h4>
-            <button type="button" class="secondary" (click)="openAddUsers()">Add Students</button>
+            <button 
+              type="button" 
+              class="secondary" 
+              (click)="openAddUsers()">
+              Add Students
+            </button>
           </div>
-
-          @if (!access?.accessUsers?.length) {
-            <p class="empty-text">No students added yet</p>
-          }
 
           @if (access?.accessUsers?.length) {
             <div class="users-list">
@@ -109,12 +104,13 @@ import { ToastService } from '../../core/services/toast.service';
         <div class="groups-section">
           <div class="section-header">
             <h4>Student Groups</h4>
-            <button type="button" class="secondary" (click)="openAddGroups()">Add Groups</button>
+            <button 
+              type="button" 
+              class="secondary" 
+              (click)="openAddGroups()">
+              Add Groups
+            </button>
           </div>
-
-          @if (!access?.accessGroups?.length) {
-            <p class="empty-text">No groups added yet</p>
-          }
 
           @if (access?.accessGroups?.length) {
             <div class="groups-list">
@@ -390,7 +386,6 @@ import { ToastService } from '../../core/services/toast.service';
       cursor: pointer;
       align-items: center;
       background: var(--surface);
-      transition: all 0.15s ease;
     }
 
     .select-item:hover {
@@ -413,7 +408,6 @@ import { ToastService } from '../../core/services/toast.service';
       border-radius: 6px;
       background: var(--surface);
       flex-shrink: 0;
-      transition: all 0.15s ease;
     }
 
     .select-item.selected .select-checkbox {
@@ -456,6 +450,7 @@ import { ToastService } from '../../core/services/toast.service';
 export class QuizAccessComponent implements OnInit {
   @Input() quizId!: number;
   @Output() accessChanged = new EventEmitter<void>();
+  @Output() goToQuestions = new EventEmitter<void>();
 
   access: QuizAccess | null = null;
   saving = false;
@@ -491,6 +486,9 @@ export class QuizAccessComponent implements OnInit {
   }
 
   loadAccess(): void {
+    if (!this.quizId) {
+      return;
+    }
     this.quizAccessService.getByQuizId(this.quizId).subscribe({
       next: (res) => {
         if (res) {
@@ -512,7 +510,7 @@ export class QuizAccessComponent implements OnInit {
     }
   }
 
-  saveSettings(): void {
+  saveSettings(continueToQuestions: boolean = false): void {
     this.saving = true;
     this.error = '';
 
@@ -531,10 +529,15 @@ export class QuizAccessComponent implements OnInit {
         this.access = res;
         this.accessChanged.emit();
         this.toast.success('Settings saved successfully');
+        
+        if (continueToQuestions) {
+          this.goToQuestions.emit();
+        }
       },
       error: (err) => {
         this.saving = false;
         this.error = err?.error?.message || 'Failed to save settings';
+        this.toast.error(this.error);
       }
     });
   }
@@ -546,8 +549,55 @@ export class QuizAccessComponent implements OnInit {
   }
 
   openAddUsers(): void {
+    if (!this.access) {
+      this.saveSettingsAndProceed(() => {
+        this.showAddUsers = true;
+        this.loadAvailableStudents();
+      });
+      return;
+    }
     this.showAddUsers = true;
     this.loadAvailableStudents();
+  }
+
+  openAddGroups(): void {
+    if (!this.access) {
+      this.saveSettingsAndProceed(() => {
+        this.showAddGroups = true;
+        this.loadAvailableGroups();
+      });
+      return;
+    }
+    this.showAddGroups = true;
+    this.loadAvailableGroups();
+  }
+
+  private saveSettingsAndProceed(callback: () => void): void {
+    this.saving = true;
+    this.error = '';
+
+    const dto = {
+      examMode: this.form.examMode,
+      accessType: this.form.accessType,
+      maxAttempts: this.form.maxAttempts,
+      timerMinutes: this.form.timerMinutes || undefined,
+      scheduledStartTime: this.form.scheduledStartTime || undefined,
+      scheduledEndTime: this.form.scheduledEndTime || undefined
+    };
+
+    this.quizAccessService.createOrUpdate(this.quizId, dto).subscribe({
+      next: (res) => {
+        this.saving = false;
+        this.access = res;
+        this.accessChanged.emit();
+        callback();
+      },
+      error: (err) => {
+        this.saving = false;
+        this.error = err?.error?.message || 'Failed to save settings';
+        this.toast.error(this.error);
+      }
+    });
   }
 
   loadAvailableStudents(): void {
@@ -557,7 +607,10 @@ export class QuizAccessComponent implements OnInit {
         this.loadingStudents = false;
         this.availableStudents = res;
       },
-      error: () => this.loadingStudents = false
+      error: (err) => {
+        this.loadingStudents = false;
+        this.toast.error(err?.error?.message || 'Failed to load available students');
+      }
     });
   }
 
@@ -585,7 +638,8 @@ export class QuizAccessComponent implements OnInit {
         this.closeAddUsers();
         this.accessChanged.emit();
         this.toast.success('Students added successfully');
-      }
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to add students')
     });
   }
 
@@ -595,11 +649,6 @@ export class QuizAccessComponent implements OnInit {
     this.availableGroups = [];
   }
 
-  openAddGroups(): void {
-    this.showAddGroups = true;
-    this.loadAvailableGroups();
-  }
-
   loadAvailableGroups(): void {
     this.loadingGroups = true;
     this.quizAccessService.getAvailableGroups(this.quizId).subscribe({
@@ -607,7 +656,10 @@ export class QuizAccessComponent implements OnInit {
         this.loadingGroups = false;
         this.availableGroups = res;
       },
-      error: () => this.loadingGroups = false
+      error: (err) => {
+        this.loadingGroups = false;
+        this.toast.error(err?.error?.message || 'Failed to load available groups');
+      }
     });
   }
 
@@ -635,7 +687,8 @@ export class QuizAccessComponent implements OnInit {
         this.closeAddGroups();
         this.accessChanged.emit();
         this.toast.success('Groups added successfully');
-      }
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to add groups')
     });
   }
 
@@ -644,7 +697,8 @@ export class QuizAccessComponent implements OnInit {
       next: (res) => {
         this.access = res;
         this.toast.success('Student approved');
-      }
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to approve student')
     });
   }
 
@@ -657,7 +711,12 @@ export class QuizAccessComponent implements OnInit {
     }).then(confirmed => {
       if (confirmed) {
         this.quizAccessService.removeUser(this.quizId, userAccessId).subscribe({
-          next: (res) => { this.access = res; this.accessChanged.emit(); }
+          next: (res) => {
+            this.access = res;
+            this.accessChanged.emit();
+            this.toast.success('Student removed successfully');
+          },
+          error: (err) => this.toast.error(err?.error?.message || 'Failed to remove student')
         });
       }
     });
@@ -672,7 +731,12 @@ export class QuizAccessComponent implements OnInit {
     }).then(confirmed => {
       if (confirmed) {
         this.quizAccessService.removeGroup(this.quizId, groupAccessId).subscribe({
-          next: (res) => { this.access = res; this.accessChanged.emit(); }
+          next: (res) => {
+            this.access = res;
+            this.accessChanged.emit();
+            this.toast.success('Group removed successfully');
+          },
+          error: (err) => this.toast.error(err?.error?.message || 'Failed to remove group')
         });
       }
     });
@@ -683,7 +747,8 @@ export class QuizAccessComponent implements OnInit {
       next: () => {
         this.loadAccess();
         this.toast.success('Extra attempts approved');
-      }
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to approve extra attempts')
     });
   }
 

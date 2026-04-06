@@ -74,19 +74,7 @@ import { ToastService, Toast } from '../core/services/toast.service';
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
       cursor: pointer;
       pointer-events: auto;
-      animation: slideIn 0.3s ease-out;
       min-width: 280px;
-    }
-
-    @keyframes slideIn {
-      from {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
     }
 
     .toast-icon {
@@ -109,7 +97,6 @@ import { ToastService, Toast } from '../core/services/toast.service';
       cursor: pointer;
       padding: 4px;
       opacity: 0.6;
-      transition: opacity 0.2s;
       color: var(--muted);
     }
 

@@ -573,4 +573,288 @@ public class QuestionService : IQuestionService
             .OrderBy(c => c.Name)
             .ToListAsync();
     }
+
+    public async Task<QuestionResponseDto?> DuplicateAsync(int questionId, int userId)
+    {
+        var original = await _context.Set<Question>()
+            .Include(x => x.Choices.Where(c => !c.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == questionId && !x.IsDeleted);
+
+        if (original is null)
+        {
+            return null;
+        }
+
+        var newQuestion = new Question
+        {
+            Title = $"{original.Title} (Copy)",
+            Text = original.Text,
+            Type = original.Type,
+            SelectionMode = original.SelectionMode,
+            Difficulty = original.Difficulty,
+            Explanation = original.Explanation,
+            Points = original.Points,
+            AnswerSeconds = original.AnswerSeconds,
+            CreatedBy = userId,
+            CreatedAt = DateTime.UtcNow,
+            IsDeleted = false,
+            CategoryId = original.CategoryId,
+            QuizId = original.QuizId
+        };
+
+        foreach (var choice in original.Choices.OrderBy(c => c.Order))
+        {
+            newQuestion.Choices.Add(new QuestionChoice
+            {
+                ChoiceText = choice.ChoiceText,
+                IsCorrect = choice.IsCorrect,
+                Order = choice.Order,
+                IsDeleted = false
+            });
+        }
+
+        _context.Set<Question>().Add(newQuestion);
+        await _context.SaveChangesAsync();
+
+        return await GetByIdAsync(newQuestion.Id);
+    }
+
+    public async Task<int> ImportFromExcelAsync(IFormFile file)
+    {
+        var questions = new List<Question>();
+        var categories = await _context.Set<QuestionCategory>().ToListAsync();
+
+        using var stream = file.OpenReadStream();
+        using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+        var worksheet = workbook.Worksheet(1);
+        var rows = worksheet.RowsUsed().Skip(1);
+
+        foreach (var row in rows)
+        {
+            var title = row.Cell(1).GetString();
+            if (string.IsNullOrWhiteSpace(title)) continue;
+
+            var categoryName = row.Cell(2).GetString();
+            var category = categories.FirstOrDefault(c => c.Name.Equals(categoryName, StringComparison.OrdinalIgnoreCase));
+
+            var question = new Question
+            {
+                Title = title,
+                Text = row.Cell(3).GetString(),
+                Type = (QuestionType)GetQuestionType(row.Cell(4).GetString()),
+                SelectionMode = QuestionSelectionMode.Single,
+                Difficulty = row.Cell(5).GetString(),
+                Points = GetCellValueOrDefault(row.Cell(6), 1),
+                AnswerSeconds = 30,
+                CategoryId = category?.Id,
+                IsDeleted = false,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var correctIndex = row.Cell(7).GetString().Trim().ToUpper();
+            var choiceTexts = new[] {
+                row.Cell(8).GetString(),
+                row.Cell(9).GetString(),
+                row.Cell(10).GetString(),
+                row.Cell(11).GetString()
+            };
+
+            for (int i = 0; i < choiceTexts.Length; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(choiceTexts[i]))
+                {
+                    question.Choices.Add(new QuestionChoice
+                    {
+                        ChoiceText = choiceTexts[i],
+                        IsCorrect = correctIndex == ((char)('A' + i)).ToString(),
+                        Order = i + 1,
+                        IsDeleted = false
+                    });
+                }
+            }
+
+            if (question.Choices.Count == 0)
+            {
+                question.Type = QuestionType.ShortAnswer;
+            }
+
+            questions.Add(question);
+        }
+
+        _context.Set<Question>().AddRange(questions);
+        await _context.SaveChangesAsync();
+
+        return questions.Count;
+    }
+
+    private static int GetCellValueOrDefault(ClosedXML.Excel.IXLCell cell, int defaultValue)
+    {
+        if (cell.Value.IsNumber)
+            return (int)cell.Value.GetNumber();
+        if (cell.Value.IsText && int.TryParse(cell.Value.GetText(), out int result))
+            return result;
+        return defaultValue;
+    }
+
+    public async Task<Stream> ExportToExcelAsync(string? search = null, int? type = null, string? difficulty = null)
+    {
+        var query = _context.Set<Question>().Include(q => q.Category).Include(q => q.Choices.Where(c => !c.IsDeleted)).AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(q => q.Title.Contains(search) || q.Text.Contains(search));
+        }
+        if (type.HasValue)
+        {
+            query = query.Where(q => q.Type == (QuestionType)type.Value);
+        }
+        if (!string.IsNullOrWhiteSpace(difficulty))
+        {
+            query = query.Where(q => q.Difficulty == difficulty);
+        }
+
+        var questions = await query.Where(q => !q.IsDeleted).OrderBy(q => q.Id).ToListAsync();
+
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Questions");
+
+        worksheet.Cell(1, 1).Value = "Title";
+        worksheet.Cell(1, 2).Value = "Category";
+        worksheet.Cell(1, 3).Value = "Text";
+        worksheet.Cell(1, 4).Value = "Type";
+        worksheet.Cell(1, 5).Value = "Difficulty";
+        worksheet.Cell(1, 6).Value = "Points";
+        worksheet.Cell(1, 7).Value = "Correct Answer";
+        worksheet.Cell(1, 8).Value = "Choice A";
+        worksheet.Cell(1, 9).Value = "Choice B";
+        worksheet.Cell(1, 10).Value = "Choice C";
+        worksheet.Cell(1, 11).Value = "Choice D";
+
+        var headerRange = worksheet.Range(1, 1, 1, 11);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+        int row = 2;
+        foreach (var q in questions)
+        {
+            worksheet.Cell(row, 1).Value = q.Title;
+            worksheet.Cell(row, 2).Value = q.Category?.Name ?? "";
+            worksheet.Cell(row, 3).Value = q.Text;
+            worksheet.Cell(row, 4).Value = GetTypeName(q.Type);
+            worksheet.Cell(row, 5).Value = q.Difficulty ?? "";
+            worksheet.Cell(row, 6).Value = q.Points;
+
+            var correctChoice = q.Choices.OrderBy(c => c.Order).FirstOrDefault(c => c.IsCorrect);
+            worksheet.Cell(row, 7).Value = correctChoice != null ? GetChoiceLetter(correctChoice.Order) : "";
+
+            var orderedChoices = q.Choices.OrderBy(c => c.Order).ToList();
+            for (int i = 0; i < 4 && i < orderedChoices.Count; i++)
+            {
+                worksheet.Cell(row, 8 + i).Value = orderedChoices[i].ChoiceText;
+            }
+
+            row++;
+        }
+
+        worksheet.Columns().AdjustToContents();
+
+        var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        return stream;
+    }
+
+    private static QuestionType GetQuestionType(string typeStr)
+    {
+        return typeStr.ToLower() switch
+        {
+            "multiple choice" or "mcq" => QuestionType.MultipleChoice,
+            "true/false" or "tf" => QuestionType.TrueFalse,
+            "short answer" => QuestionType.ShortAnswer,
+            _ => QuestionType.MultipleChoice
+        };
+    }
+
+    private static string GetTypeName(QuestionType type)
+    {
+        return type switch
+        {
+            QuestionType.MultipleChoice => "Multiple Choice",
+            QuestionType.TrueFalse => "True/False",
+            QuestionType.ShortAnswer => "Short Answer",
+            _ => "Multiple Choice"
+        };
+    }
+
+    private static string GetChoiceLetter(int order)
+    {
+        return order switch
+        {
+            1 => "A",
+            2 => "B",
+            3 => "C",
+            4 => "D",
+            _ => ""
+        };
+    }
+
+    public async Task<Stream> ExportSelectedToExcelAsync(List<int> ids)
+    {
+        var questions = await _context.Set<Question>()
+            .Include(q => q.Category)
+            .Include(q => q.Choices.Where(c => !c.IsDeleted))
+            .Where(q => !q.IsDeleted && ids.Contains(q.Id))
+            .OrderBy(q => q.Id)
+            .ToListAsync();
+
+        using var workbook = new ClosedXML.Excel.XLWorkbook();
+        var worksheet = workbook.Worksheets.Add("Questions");
+
+        worksheet.Cell(1, 1).Value = "Title";
+        worksheet.Cell(1, 2).Value = "Category";
+        worksheet.Cell(1, 3).Value = "Text";
+        worksheet.Cell(1, 4).Value = "Type";
+        worksheet.Cell(1, 5).Value = "Difficulty";
+        worksheet.Cell(1, 6).Value = "Points";
+        worksheet.Cell(1, 7).Value = "Correct Answer";
+        worksheet.Cell(1, 8).Value = "Choice A";
+        worksheet.Cell(1, 9).Value = "Choice B";
+        worksheet.Cell(1, 10).Value = "Choice C";
+        worksheet.Cell(1, 11).Value = "Choice D";
+
+        var headerRange = worksheet.Range(1, 1, 1, 11);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.LightGray;
+
+        int row = 2;
+        foreach (var q in questions)
+        {
+            worksheet.Cell(row, 1).Value = q.Title;
+            worksheet.Cell(row, 2).Value = q.Category?.Name ?? "";
+            worksheet.Cell(row, 3).Value = q.Text;
+            worksheet.Cell(row, 4).Value = GetTypeName(q.Type);
+            worksheet.Cell(row, 5).Value = q.Difficulty ?? "";
+            worksheet.Cell(row, 6).Value = q.Points;
+
+            var correctChoice = q.Choices.OrderBy(c => c.Order).FirstOrDefault(c => c.IsCorrect);
+            worksheet.Cell(row, 7).Value = correctChoice != null ? GetChoiceLetter(correctChoice.Order) : "";
+
+            var orderedChoices = q.Choices.OrderBy(c => c.Order).ToList();
+            for (int i = 0; i < 4 && i < orderedChoices.Count; i++)
+            {
+                worksheet.Cell(row, 8 + i).Value = orderedChoices[i].ChoiceText;
+            }
+
+            row++;
+        }
+
+        worksheet.Columns().AdjustToContents();
+
+        var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        return stream;
+    }
 }

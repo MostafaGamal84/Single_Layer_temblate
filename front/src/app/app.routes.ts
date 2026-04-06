@@ -10,6 +10,17 @@ export const routes: Routes = [
   { path: 'auth/pending-status', loadComponent: () => import('./features/auth/pending-status.component').then((m) => m.PendingStatusComponent) },
 
   {
+    path: 'questions',
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
+    data: { roles: ['Admin', 'Host'] },
+    children: [
+      { path: '', loadComponent: () => import('./features/questions/question-bank.component').then((m) => m.QuestionBankComponent) },
+      { path: 'new', loadComponent: () => import('./features/questions/question-form.component').then((m) => m.QuestionFormComponent) },
+      { path: ':id/edit', loadComponent: () => import('./features/questions/question-form.component').then((m) => m.QuestionFormComponent) }
+    ]
+  },
+
+  {
     path: 'quizzes',
     canActivate: [authGuard, pendingStatusGuard, roleGuard],
     data: { roles: ['Admin', 'Host'] },
@@ -64,6 +75,13 @@ export const routes: Routes = [
 
   { path: 'test-mode', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/test-mode/test-mode-list.component').then((m) => m.TestModeListComponent) },
   { path: 'test-mode/attempt/:attemptId', canActivate: [authGuard, pendingStatusGuard], loadComponent: () => import('./features/test-mode/test-mode-attempt.component').then((m) => m.TestModeAttemptComponent) },
+
+  {
+    path: 'permissions',
+    canActivate: [authGuard, pendingStatusGuard, roleGuard],
+    data: { roles: ['Admin'] },
+    loadComponent: () => import('./features/admin/permissions.component').then((m) => m.PermissionsComponent)
+  },
 
   { path: '', redirectTo: '/auth/login', pathMatch: 'full' },
   { path: '**', redirectTo: '/auth/login' }

@@ -38,6 +38,7 @@ export class AuthService {
   readonly role = signal<string | null>(null);
   readonly userId = signal<number | null>(null);
   readonly status = signal<number>(1);
+  readonly permissions = signal<{ [key: string]: boolean }>({});
 
   constructor(
     private http: HttpClient,
@@ -107,12 +108,35 @@ export class AuthService {
     if (userId) {
       this.writeStorage(this.userIdKey, String(userId));
       this.userId.set(userId);
+      this.loadPermissions(userId);
     }
 
     if (status !== undefined) {
       this.writeStorage(this.statusKey, String(status));
       this.status.set(status);
     }
+  }
+
+  loadPermissions(userId: number): void {
+    if (this.role() === 'Admin') {
+      const allPerms: { [key: string]: boolean } = {
+        'AddQuestions': true, 'EditQuestions': true, 'DeleteQuestions': true,
+        'AddTests': true, 'EditTests': true, 'DeleteTests': true,
+        'ViewStudentResults': true, 'ApproveRejectUsers': true,
+        'AddRemoveStudentsToGroups': true, 'ManageLiveClasses': true
+      };
+      this.permissions.set(allPerms);
+      return;
+    }
+
+    this.http.get<any>(`${environment.apiBaseUrl}/permissions/user/${userId}`).subscribe({
+      next: (perms) => this.permissions.set(perms || {}),
+      error: () => this.permissions.set({})
+    });
+  }
+
+  hasPermission(permission: string): boolean {
+    return this.permissions()[permission] === true;
   }
 
   logout(): void {
@@ -124,6 +148,7 @@ export class AuthService {
     this.role.set(null);
     this.userId.set(null);
     this.status.set(1);
+    this.permissions.set({});
     this.router.navigate(['/auth/login']);
   }
 

@@ -100,7 +100,6 @@ import { RouterLink } from '@angular/router';
       border-radius: 12px;
       text-decoration: none;
       font-weight: 600;
-      transition: opacity 0.2s;
     }
 
     .btn-back:hover {

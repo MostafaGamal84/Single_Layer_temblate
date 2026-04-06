@@ -163,7 +163,7 @@ export class LoginComponent {
         if (role === 'Player') {
           this.router.navigate(['/player/history']);
         } else if (role === 'Admin' || role === 'Host') {
-          this.router.navigate(['/quizzes']);
+          this.router.navigate(['/questions']);
         } else {
           this.router.navigate(['/test-mode']);
         }

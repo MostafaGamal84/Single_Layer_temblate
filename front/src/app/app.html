@@ -7,26 +7,9 @@
     <aside class="sidebar" [class.sidebar-open]="mobileSidebarOpen()">
       <div class="sidebar-brand">
         <div class="brand-mark">QZ</div>
-        <div class="brand-copy">
-          <p class="brand-kicker">{{ brandModeLabel() }}</p>
-          <h2>Quiz Atelier</h2>
-          <p>{{ workspaceSummary() }}</p>
-        </div>
-        <button type="button" class="secondary sidebar-close" (click)="closeSidebar()" aria-label="Close menu">
-          <span></span>
-          <span></span>
+        <button type="button" class="sidebar-close" (click)="closeSidebar()" aria-label="Close menu">
+          ✕
         </button>
-      </div>
-
-      <div class="sidebar-meta">
-        <div class="sidebar-role">
-          <span class="status-dot"></span>
-          {{ auth.role() || 'User' }} workspace
-        </div>
-        <div class="sidebar-mini-card">
-          <span>Visual Mode</span>
-          <strong>{{ currentThemeLabel() }}</strong>
-        </div>
       </div>
 
       <nav class="sidebar-menu">
@@ -38,6 +21,13 @@
               <small>Build reusable test banks</small>
             </span>
           </a>
+          <a routerLink="/questions" routerLinkActive="active" (click)="closeSidebar()">
+            <i class="pi pi-book nav-icon" aria-hidden="true"></i>
+            <span class="nav-copy">
+              <span>Question Bank</span>
+              <small>Craft and refine your library</small>
+            </span>
+          </a>
           <a routerLink="/students/groups" routerLinkActive="active" (click)="closeSidebar()">
             <i class="pi pi-users nav-icon" aria-hidden="true"></i>
             <span class="nav-copy">
@@ -45,13 +35,15 @@
               <small>Organize access by group</small>
             </span>
           </a>
-          <a routerLink="/students" routerLinkActive="active" (click)="closeSidebar()">
-            <i class="pi pi-user-plus nav-icon" aria-hidden="true"></i>
-            <span class="nav-copy">
-              <span>Student Approval</span>
-              <small>Review pending registrations</small>
-            </span>
-          </a>
+          @if (auth.hasPermission('ApproveRejectUsers')) {
+            <a routerLink="/students" routerLinkActive="active" (click)="closeSidebar()">
+              <i class="pi pi-user-plus nav-icon" aria-hidden="true"></i>
+              <span class="nav-copy">
+                <span>Student Approval</span>
+                <small>Review pending registrations</small>
+              </span>
+            </a>
+          }
           <a routerLink="/game-sessions" routerLinkActive="active" (click)="closeSidebar()">
             <i class="pi pi-megaphone nav-icon" aria-hidden="true"></i>
             <span class="nav-copy">
@@ -66,6 +58,15 @@
               <small>Read outcomes and trends</small>
             </span>
           </a>
+          @if (auth.role() === 'Admin') {
+            <a routerLink="/permissions" routerLinkActive="active" (click)="closeSidebar()">
+              <i class="pi pi-shield nav-icon" aria-hidden="true"></i>
+              <span class="nav-copy">
+                <span>Permissions</span>
+                <small>Manage user access</small>
+              </span>
+            </a>
+          }
         }
         @if (auth.role() === 'Player') {
           <a routerLink="/player/history" routerLinkActive="active" (click)="closeSidebar()">
@@ -93,26 +94,15 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="sidebar-insight">
-          <span class="sidebar-insight-label">{{ shellKicker() }}</span>
-          <strong>{{ shellTitle() }}</strong>
-          <p class="sidebar-insight-copy">{{ workspaceHeadline() }}</p>
-          <div class="topbar-chip sidebar-chip">
-            <span class="status-dot"></span>
-            Realtime ready
-          </div>
-          <button type="button" class="secondary theme-switch" (click)="toggleTheme()">{{ themeActionLabel() }}</button>
-        </div>
         <button class="logout-btn" (click)="logout()">Logout</button>
       </div>
     </aside>
 
-    <button
-      type="button"
-      class="sidebar-backdrop"
-      [class.sidebar-backdrop-visible]="mobileSidebarOpen()"
-      (click)="closeSidebar()"
-      aria-label="Close menu"></button>
+    @if (mobileSidebarOpen()) {
+      <div class="sidebar-backdrop" 
+           (click)="closeSidebar()" 
+           (touchstart)="closeSidebar()"></div>
+    }
 
     @if (!mobileSidebarOpen()) {
       <button
@@ -138,25 +128,13 @@
 
     @if (showMenu()) {
       <header class="shell-topbar card">
-        <div class="shell-topbar-copy">
-          <p class="eyebrow">{{ shellKicker() }}</p>
-          <h1>{{ shellTitle() }}</h1>
-          <p>{{ workspaceHeadline() }}</p>
+        <div class="shell-topbar-user">
+          <div class="user-avatar-small">{{ userName() }}</div>
+          <span class="user-name-small">{{ userRole() }}</span>
         </div>
-
-        <div class="shell-topbar-actions">
-          <a class="topbar-action topbar-action-primary" [routerLink]="primaryActionLink()">
-            <i class="{{ primaryActionIcon() }}" aria-hidden="true"></i>
-            <span>{{ primaryActionLabel() }}</span>
-          </a>
-          <a class="topbar-action topbar-action-secondary" [routerLink]="secondaryActionLink()">
-            <i class="{{ secondaryActionIcon() }}" aria-hidden="true"></i>
-            <span>{{ secondaryActionLabel() }}</span>
-          </a>
-          <button type="button" class="secondary topbar-theme" (click)="toggleTheme()">
-            {{ themeActionLabel() }}
-          </button>
-        </div>
+        <button type="button" class="secondary topbar-theme" (click)="toggleTheme()">
+          <i class="pi" [class.pi-moon]="!theme.isDark()" [class.pi-sun]="theme.isDark()"></i>
+        </button>
       </header>
     }
 

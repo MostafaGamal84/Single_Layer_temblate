@@ -142,4 +142,83 @@ public class QuestionsController : ControllerBase
             QuestionCount = c.Questions.Count(q => !q.IsDeleted)
         }));
     }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("{id:int}/duplicate")]
+    public async Task<IActionResult> DuplicateQuestion(int id)
+    {
+        var result = await _service.DuplicateAsync(id, User.GetUserId());
+        return result is null ? NotFound(new { message = "Question not found" }) : CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-delete")]
+    public async Task<IActionResult> BulkDelete([FromBody] List<int> ids)
+    {
+        if (ids is null || ids.Count == 0)
+        {
+            return BadRequest(new { message = "No IDs provided" });
+        }
+
+        var deleted = 0;
+        foreach (var id in ids)
+        {
+            if (await _service.SoftDeleteAsync(id))
+            {
+                deleted++;
+            }
+        }
+
+        return Ok(new { message = $"Deleted {deleted} questions", deletedCount = deleted });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("import")]
+    public async Task<IActionResult> ImportQuestions([FromForm] IFormFile? file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Please select an Excel file to import." });
+        }
+
+        try
+        {
+            var result = await _service.ImportFromExcelAsync(file);
+            return Ok(new { message = $"Successfully imported {result} questions." });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportQuestions([FromQuery] string? search, [FromQuery] int? type, [FromQuery] string? difficulty)
+    {
+        try
+        {
+            var stream = await _service.ExportToExcelAsync(search, type, difficulty);
+            return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "questions.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-export")]
+    public async Task<IActionResult> BulkExportQuestions([FromBody] List<int> ids)
+    {
+        try
+        {
+            var stream = await _service.ExportSelectedToExcelAsync(ids);
+            return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "questions.xlsx");
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

@@ -328,7 +328,6 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
     .timer-fill {
       height: 100%;
       background: linear-gradient(90deg, var(--accent), var(--primary));
-      transition: width 0.28s linear;
     }
 
     .timer-fill.timer-fill-danger {
@@ -392,7 +391,6 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       color: var(--text);
       text-align: left;
       box-shadow: none;
-      transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
     }
 
     .choice-pill:hover:not(:disabled) {

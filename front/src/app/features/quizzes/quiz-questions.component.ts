@@ -189,6 +189,9 @@ interface CategoryWithCount {
             <button type="button" [disabled]="selectedBankQuestions.size === 0" (click)="addSelectedQuestions()">
               Add {{ selectedBankQuestions.size }} Question(s)
             </button>
+            <button type="button" [disabled]="selectedBankQuestions.size === 0" (click)="addSelectedQuestions(true)">
+              Add & Save
+            </button>
           </div>
         </div>
       </div>
@@ -234,6 +237,9 @@ interface CategoryWithCount {
             <button type="button" class="secondary" (click)="closeRandomSelector()">Cancel</button>
             <button type="button" [disabled]="randomLoading || getTotalSelected() === 0" (click)="addRandomQuestions()">
               Add {{ getTotalSelected() }} Question(s)
+            </button>
+            <button type="button" [disabled]="randomLoading || getTotalSelected() === 0" (click)="addRandomQuestions(true)">
+              Add & Save
             </button>
           </div>
         </div>
@@ -530,12 +536,13 @@ interface CategoryWithCount {
       padding: 24px;
       min-width: 400px;
       max-width: 90vw;
-      max-height: 85vh;
+      width: 700px;
+      height: 80vh;
       display: flex;
       flex-direction: column;
     }
 
-    .modal-large { width: 700px; }
+    .modal-large { width: 700px; min-height: 500px; }
 
     .modal-header {
       display: flex;
@@ -547,8 +554,8 @@ interface CategoryWithCount {
     .modal-header h3 { margin: 0; }
     .close-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; }
 
-    .modal-body { flex: 1; overflow-y: auto; display: grid; gap: 12px; }
-    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+    .modal-body { flex: 1; overflow-y: auto; display: grid; gap: 12px; min-height: 0; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; flex-shrink: 0; }
 
     .browser-filters { display: flex; gap: 8px; }
     .browser-filters input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
@@ -571,7 +578,6 @@ interface CategoryWithCount {
       cursor: pointer;
       align-items: flex-start;
       background: var(--surface);
-      transition: all 0.15s ease;
     }
 
     .bank-question-item:hover:not(.disabled) {
@@ -599,7 +605,6 @@ interface CategoryWithCount {
       border-radius: 6px;
       background: var(--surface);
       flex-shrink: 0;
-      transition: all 0.15s ease;
     }
 
     .bank-question-item.selected .bank-checkbox {
@@ -677,12 +682,12 @@ interface CategoryWithCount {
       padding: 24px;
       width: 100%;
       max-width: 500px;
-      max-height: 90vh;
+      max-height: 100%;
       overflow-y: auto;
       box-shadow: var(--dialog-panel-shadow);
     }
 
-    .modal-large { max-width: 600px; }
+    .modal-large { max-width: 600px; min-height: 400px; }
 
     .modal-header {
       display: flex;
@@ -704,8 +709,8 @@ interface CategoryWithCount {
     }
     .close-btn:hover { background: var(--surface-soft); color: var(--text); }
 
-    .modal-body { display: grid; gap: 14px; }
-    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .modal-body { display: grid; gap: 14px; min-height: 0; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; flex-shrink: 0; }
 
     .category-random-list { display: grid; gap: 10px; }
     .category-random-item {
@@ -820,7 +825,7 @@ export class QuizQuestionsComponent implements OnInit {
     return this.questions.some((q: any) => Number(q.questionId) === Number(questionId));
   }
 
-  addSelectedQuestions(): void {
+  addSelectedQuestions(saveAndClose: boolean = false): void {
     if (this.selectedBankQuestions.size === 0) return;
 
     const nextOrder = Math.max(...this.questions.map((q: any) => Number(q.order) || 0), 0) + 1;
@@ -835,6 +840,9 @@ export class QuizQuestionsComponent implements OnInit {
       next: () => {
         this.closeQuestionBrowser();
         this.refreshQuestions();
+        if (saveAndClose) {
+          this.questionsChanged.emit();
+        }
       },
       error: (err) => {
         this.error = err?.error?.message || 'Failed to add questions';
@@ -925,7 +933,7 @@ export class QuizQuestionsComponent implements OnInit {
     return this.categoriesWithCounts.reduce((sum, c) => sum + (c.selectedCount || 0), 0);
   }
 
-  addRandomQuestions(): void {
+  addRandomQuestions(saveAndClose: boolean = false): void {
     const selections = this.categoriesWithCounts
       .filter(c => c.selectedCount > 0 && c.selectedCount <= c.questionCount)
       .map(c => ({ categoryId: c.id, count: c.selectedCount }));
@@ -964,6 +972,9 @@ export class QuizQuestionsComponent implements OnInit {
             this.closeRandomSelector();
             this.refreshQuestions();
             this.toast.success(`Added ${items.length} random questions`);
+            if (saveAndClose) {
+              this.questionsChanged.emit();
+            }
           },
           error: (err) => {
             this.error = err?.error?.message || 'Failed to add random questions';

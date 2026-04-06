@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { PagedResult, Question, Quiz } from '../models';
-import { map } from 'rxjs';
+import { map, switchMap } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class QuizService {
@@ -56,6 +56,11 @@ export class QuizService {
   removeQuestion(id: number, quizQuestionId: number) { return this.http.delete(`${this.base}/${id}/questions/${quizQuestionId}`); }
   reorderQuestions(id: number, payload: any[]) { return this.http.put(`${this.base}/${id}/questions/reorder`, payload); }
   publish(id: number, isPublished: boolean) { return this.http.put(`${this.base}/${id}/publish`, { isPublished }); }
+  togglePublish(id: number) {
+    return this.http.get<any>(`${this.base}/${id}`).pipe(
+      switchMap(quiz => this.http.put(`${this.base}/${id}/publish`, { isPublished: !quiz.isPublished }))
+    );
+  }
 
   exportQuiz(id: number) {
     return this.http.get(`${this.base}/${id}/export`, { responseType: 'blob' }).pipe(
@@ -74,6 +79,37 @@ export class QuizService {
     const formData = new FormData();
     formData.append('file', file);
     return this.http.post<any>(`${this.base}/import`, formData);
+  }
+
+  duplicate(id: number) {
+    return this.http.post<any>(`${this.base}/${id}/duplicate`, {});
+  }
+
+  bulkDuplicate(ids: number[]) {
+    return this.http.post<any>(`${this.base}/bulk-duplicate`, ids);
+  }
+
+  bulkDelete(ids: number[]) {
+    return this.http.post<any>(`${this.base}/bulk-delete`, ids);
+  }
+
+  bulkPublish(ids: number[], publish: boolean) {
+    return this.http.post<any>(`${this.base}/bulk-publish`, { ids, publish });
+  }
+
+  bulkExport(ids: number[]) {
+    return this.http.post(`${this.base}/bulk-export`, ids, {
+      responseType: 'blob'
+    }).pipe(
+      map((blob: any) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'quizzes_export.zip';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+    );
   }
 
   private toArray(value: any): any[] {

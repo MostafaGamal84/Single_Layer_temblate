@@ -389,7 +389,8 @@ export class StudentGroupsComponent implements OnInit {
           this.closeCreateModal();
           this.loadGroups();
           this.toast.success('Group updated successfully');
-        }
+        },
+        error: (err) => this.toast.error(err?.error?.message || 'Failed to update group')
       });
     } else {
       this.service.create(this.groupForm).subscribe({
@@ -397,7 +398,8 @@ export class StudentGroupsComponent implements OnInit {
           this.closeCreateModal();
           this.loadGroups();
           this.toast.success('Group created successfully');
-        }
+        },
+        error: (err) => this.toast.error(err?.error?.message || 'Failed to create group')
       });
     }
   }
@@ -410,7 +412,13 @@ export class StudentGroupsComponent implements OnInit {
       tone: 'danger'
     });
     if (confirmed) {
-      this.service.delete(id).subscribe({ next: () => this.loadGroups() });
+      this.service.delete(id).subscribe({
+        next: () => {
+          this.loadGroups();
+          this.toast.success('Group deleted successfully');
+        },
+        error: (err) => this.toast.error(err?.error?.message || 'Failed to delete group')
+      });
     }
   }
 
@@ -420,7 +428,8 @@ export class StudentGroupsComponent implements OnInit {
       next: (res) => {
         this.selectedGroupMembers = res.members || [];
         this.showMembersModal = true;
-      }
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to load group members')
     });
   }
 
@@ -436,7 +445,9 @@ export class StudentGroupsComponent implements OnInit {
         this.selectedGroupMembers = res.members || [];
         this.selectedGroup = res;
         this.updateGroupInList(res);
-      }
+        this.toast.success('Member approved');
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to approve member')
     });
   }
 
@@ -446,7 +457,9 @@ export class StudentGroupsComponent implements OnInit {
         this.selectedGroupMembers = res.members || [];
         this.selectedGroup = res;
         this.updateGroupInList(res);
-      }
+        this.toast.success('Member suspended');
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to suspend member')
     });
   }
 
@@ -464,7 +477,8 @@ export class StudentGroupsComponent implements OnInit {
           this.selectedGroup = res;
           this.updateGroupInList(res);
           this.toast.success('Member removed');
-        }
+        },
+        error: (err) => this.toast.error(err?.error?.message || 'Failed to remove member')
       });
     }
   }
@@ -486,14 +500,17 @@ export class StudentGroupsComponent implements OnInit {
 
   loadStudents(): void {
     this.studentLoading = true;
-    const params: any = { pageNumber: 1, pageSize: 100, search: this.studentSearch || undefined, status: 1 };
+    const params: any = { pageNumber: 1, pageSize: 100, search: this.studentSearch || undefined, status: 1, role: 'Player' };
     this.service.getStudents(params).subscribe({
       next: (res: any) => {
         this.studentLoading = false;
         const existingMemberIds = this.selectedGroupMembers.map((m: any) => m.userId || m.id);
         this.availableStudents = (res.items || []).filter((s: any) => !existingMemberIds.includes(s.id));
       },
-      error: () => this.studentLoading = false
+      error: (err) => {
+        this.studentLoading = false;
+        this.toast.error(err?.error?.message || 'Failed to load available students');
+      }
     });
   }
 
@@ -518,7 +535,8 @@ export class StudentGroupsComponent implements OnInit {
         this.selectedGroup = res;
         this.updateGroupInList(res);
         this.toast.success('Students added successfully');
-      }
+      },
+      error: (err) => this.toast.error(err?.error?.message || 'Failed to add students')
     });
   }
 

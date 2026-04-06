@@ -46,17 +46,26 @@ export class StudentGroupService {
     return this.http.put<any>(`${this.baseUrl}/${groupId}/members/${memberId}/status`, { status });
   }
 
-  getStudents(params: { pageNumber?: number; pageSize?: number; search?: string; status?: number; groupId?: number }): Observable<PagedResult<any>> {
+  getStudents(params: { pageNumber?: number; pageSize?: number; search?: string; status?: number; groupId?: number; role?: string }): Observable<PagedResult<any>> {
     let httpParams = new HttpParams()
       .set('pageNumber', String(params.pageNumber ?? 1))
       .set('pageSize', String(params.pageSize ?? 10));
     if (params.search) httpParams = httpParams.set('search', params.search);
     if (params.status !== null && params.status !== undefined) httpParams = httpParams.set('status', String(params.status));
     if (params.groupId !== null && params.groupId !== undefined) httpParams = httpParams.set('groupId', String(params.groupId));
+    if (params.role) httpParams = httpParams.set('role', params.role);
     return this.http.get<PagedResult<any>>(`${this.baseUrl}/students`, { params: httpParams });
   }
 
   approveStudent(userId: number, status: number): Observable<void> {
     return this.http.post<void>(`${this.baseUrl}/students/approve`, { userId, status });
+  }
+
+  bulkApprove(userIds: number[]): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/students/bulk-approve`, userIds);
+  }
+
+  bulkReject(userIds: number[]): Observable<any> {
+    return this.http.post<any>(`${this.baseUrl}/students/bulk-reject`, userIds);
   }
 }

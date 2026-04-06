@@ -52,6 +52,14 @@ export class QuestionService {
     return this.http.delete(`${this.base}/${id}`);
   }
 
+  bulkDelete(ids: number[]) {
+    return this.http.post<any>(`${this.base}/bulk-delete`, ids);
+  }
+
+  duplicate(id: number) {
+    return this.http.post<any>(`${this.base}/${id}/duplicate`, {});
+  }
+
   private toArray(value: any): any[] {
     if (Array.isArray(value)) return value;
     if (value && Array.isArray(value.$values)) return value.$values;
@@ -106,6 +114,33 @@ export class QuestionService {
 
   getCategoriesWithCounts() {
     return this.http.get<any>(`${this.base}/categories-with-counts`);
+  }
+
+  importExcel(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<any>(`${this.base}/import`, formData);
+  }
+
+  exportQuestions(filters?: { search?: string; type?: number; difficulty?: string }) {
+    let params = new HttpParams();
+    if (filters?.search) params = params.set('search', filters.search);
+    if (filters?.type) params = params.set('type', String(filters.type));
+    if (filters?.difficulty) params = params.set('difficulty', filters.difficulty);
+    return this.http.get(`${this.base}/export`, { params, responseType: 'blob' });
+  }
+
+  bulkExportQuestions(ids: number[]) {
+    return this.http.post(`${this.base}/bulk-export`, ids, { responseType: 'blob' }).pipe(
+      map((blob: any) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'questions_export.xlsx';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+    );
   }
 
   private resolveAssetUrl(value: any): string {

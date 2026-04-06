@@ -50,14 +50,26 @@ import { ToastService } from '../../core/services/toast.service';
 
       @if (error) { <div class="alert">{{ error }}</div> }
 
+      @if (selectedIds.size > 0) {
+        <div class="bulk-actions-bar">
+          <span class="selection-count">{{ selectedIds.size }} selected</span>
+          <button type="button" class="secondary" (click)="clearSelection()">Clear</button>
+          <button type="button" (click)="bulkExport()">Export</button>
+          <button type="button" (click)="bulkPublish()">Publish</button>
+          <button type="button" (click)="bulkUnpublish()">Unpublish</button>
+          <button type="button" class="danger" (click)="bulkDelete()">Delete</button>
+        </div>
+      }
+
       <div class="table-wrap desktop-table">
         <table>
           <thead>
-            <tr><th>Test</th><th>Categories</th><th>Questions</th><th>Marks</th><th>Status</th><th>Actions</th></tr>
+            <tr><th style="width: 40px;"><input type="checkbox" [checked]="allSelected" (change)="toggleSelectAll()" /></th><th>Test</th><th>Categories</th><th>Questions</th><th>Marks</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             @for (quiz of items; track quiz.id) {
-              <tr>
+              <tr [class.selected-row]="selectedIds.has(quiz.id)">
+                <td><input type="checkbox" [checked]="selectedIds.has(quiz.id)" (change)="toggleSelect(quiz.id)" /></td>
                 <td>
                   <strong>{{ quiz.title }}</strong>
                   @if (quiz.description) {
@@ -70,7 +82,6 @@ import { ToastService } from '../../core/services/toast.service';
                 <td>{{ quiz.isPublished ? 'Published' : 'Draft' }}</td>
                 <td class="table-actions">
                   <button type="button" class="secondary" (click)="exportQuiz(quiz.id)">Export</button>
-                  <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Builder</button></a>
                   <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
                   <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
                   <button type="button" class="danger" (click)="remove(quiz.id)">Delete</button>
@@ -82,9 +93,12 @@ import { ToastService } from '../../core/services/toast.service';
       </div>
 
       <div class="mobile-list">
-        @for (quiz of items; track quiz.id) {
-          <article class="mobile-item">
-            <div class="mobile-head">
+            @for (quiz of items; track quiz.id) {
+              <article class="mobile-item" [class.selected-row]="selectedIds.has(quiz.id)">
+                <div class="mobile-item-checkbox">
+                  <input type="checkbox" [checked]="selectedIds.has(quiz.id)" (change)="toggleSelect(quiz.id)" />
+                </div>
+                <div class="mobile-head">
               <strong>{{ quiz.title }}</strong>
               <span class="mobile-pill">{{ quiz.isPublished ? 'Published' : 'Draft' }}</span>
             </div>
@@ -110,7 +124,6 @@ import { ToastService } from '../../core/services/toast.service';
 
             <div class="mobile-actions">
               <button type="button" class="secondary" (click)="exportQuiz(quiz.id)">Export</button>
-              <a [routerLink]="['/quizzes', quiz.id]"><button type="button" class="secondary">Builder</button></a>
               <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
               <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
               <button type="button" class="danger" (click)="remove(quiz.id)">Delete</button>
@@ -144,7 +157,7 @@ import { ToastService } from '../../core/services/toast.service';
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 10px 16px;
+padding: 10px 16px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: var(--surface);
@@ -152,7 +165,6 @@ import { ToastService } from '../../core/services/toast.service';
       font-size: 0.9rem;
       font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s;
     }
 
     .import-btn:hover {
@@ -184,6 +196,78 @@ import { ToastService } from '../../core/services/toast.service';
 
     .filter-button {
       min-height: 42px;
+    }
+
+    .bulk-actions-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 18px;
+      background: var(--surface-elevated);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .selection-count {
+      font-weight: 600;
+      color: var(--text);
+      margin-right: auto;
+    }
+
+    .bulk-actions-bar button {
+      min-height: 36px;
+      padding: 10px 18px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .bulk-actions-bar button:hover {
+      background: var(--surface-elevated);
+    }
+
+    .bulk-actions-bar button:first-of-type {
+      background: var(--primary);
+      color: var(--primary-contrast);
+      border-color: var(--primary);
+    }
+
+    .bulk-actions-bar button:first-of-type:hover {
+      background: var(--primary-hover);
+    }
+
+    .bulk-actions-bar button.danger {
+      background: var(--danger);
+      color: white;
+      border-color: var(--danger);
+    }
+
+    .bulk-actions-bar button.danger:hover {
+      background: #c82333;
+      border-color: #c82333;
+    }
+
+    .selected-row {
+      background: var(--ring) !important;
+    }
+
+    .mobile-item-checkbox {
+      margin-bottom: 8px;
+    }
+
+    .desktop-table input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .mobile-item-checkbox input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
     }
 
     .cell-copy,
@@ -316,6 +400,8 @@ export class QuizzesListComponent implements OnInit {
   published: boolean | null = null;
   error = '';
   selectedFile: File | null = null;
+  selectedIds = new Set<number>();
+  allSelected = false;
 
   constructor(
     private service: QuizService,
@@ -384,6 +470,97 @@ export class QuizzesListComponent implements OnInit {
     this.service.delete(id).subscribe({
       next: () => this.load(),
       error: (err) => this.error = err?.error?.message || 'Delete failed'
+    });
+  }
+
+  toggleSelect(id: number): void {
+    if (this.selectedIds.has(id)) {
+      this.selectedIds.delete(id);
+    } else {
+      this.selectedIds.add(id);
+    }
+    this.updateAllSelected();
+  }
+
+  toggleSelectAll(): void {
+    if (this.allSelected) {
+      this.selectedIds.clear();
+      this.allSelected = false;
+    } else {
+      this.items.forEach(q => this.selectedIds.add(q.id));
+      this.allSelected = true;
+    }
+  }
+
+  updateAllSelected(): void {
+    this.allSelected = this.items.length > 0 && this.selectedIds.size === this.items.length;
+  }
+
+  clearSelection(): void {
+    this.selectedIds.clear();
+    this.allSelected = false;
+  }
+
+  bulkPublish(): void {
+    const ids = Array.from(this.selectedIds);
+    ids.forEach(id => {
+      const quiz = this.items.find(q => q.id === id);
+      if (quiz && !quiz.isPublished) {
+        this.service.publish(id, true).subscribe();
+      }
+    });
+    setTimeout(() => {
+      this.toast.show(`${ids.length} tests published`, 'success');
+      this.clearSelection();
+      this.load();
+    }, 500);
+  }
+
+  bulkUnpublish(): void {
+    const ids = Array.from(this.selectedIds);
+    ids.forEach(id => {
+      const quiz = this.items.find(q => q.id === id);
+      if (quiz && quiz.isPublished) {
+        this.service.publish(id, false).subscribe();
+      }
+    });
+    setTimeout(() => {
+      this.toast.show(`${ids.length} tests unpublished`, 'success');
+      this.clearSelection();
+      this.load();
+    }, 500);
+  }
+
+  async bulkDelete(): Promise<void> {
+    const count = this.selectedIds.size;
+    const ok = await this.confirmDialog.open({
+      title: `Delete ${count} test(s)?`,
+      message: `This will permanently delete the selected tests.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      tone: 'danger'
+    });
+
+    if (!ok) return;
+
+    const ids = Array.from(this.selectedIds);
+    ids.forEach(id => {
+      this.service.delete(id).subscribe();
+    });
+    setTimeout(() => {
+      this.toast.show(`${count} tests deleted`, 'success');
+      this.clearSelection();
+      this.load();
+    }, 500);
+  }
+
+  bulkExport(): void {
+    const ids = Array.from(this.selectedIds);
+    this.service.bulkExport(ids).subscribe({
+      next: () => {
+        this.toast.show(`${ids.length} tests exported`, 'success');
+      },
+      error: () => this.toast.show('Export failed', 'error')
     });
   }
 

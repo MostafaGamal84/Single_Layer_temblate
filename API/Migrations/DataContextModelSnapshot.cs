@@ -871,6 +871,42 @@ namespace API.Migrations
                     b.ToTable("StudentGroupMembers");
                 });
 
+            modelBuilder.Entity("API.Entities.UserPermission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("GrantedBy")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("GrantedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsGranted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Permission")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantedByUserId");
+
+                    b.HasIndex("UserId", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("UserPermissions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.Property<int>("Id")
@@ -1200,6 +1236,23 @@ namespace API.Migrations
                         .IsRequired();
 
                     b.Navigation("StudentGroup");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("API.Entities.UserPermission", b =>
+                {
+                    b.HasOne("API.Entities.AppUser", "GrantedByUser")
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId");
+
+                    b.HasOne("API.Entities.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GrantedByUser");
 
                     b.Navigation("User");
                 });

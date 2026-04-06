@@ -88,4 +88,38 @@ public class StudentGroupsController : ControllerBase
         var result = await _service.ApproveStudentAsync(dto.UserId, dto);
         return result ? Ok(new { message = "Student status updated" }) : NotFound(new { message = "Student not found" });
     }
+
+    [HttpPost("students/bulk-approve")]
+    [Authorize(Roles = "Admin,Host")]
+    public async Task<IActionResult> BulkApproveStudents([FromBody] List<int> userIds)
+    {
+        if (userIds is null || userIds.Count == 0)
+            return BadRequest(new { message = "No users provided" });
+
+        var count = 0;
+        foreach (var userId in userIds)
+        {
+            var result = await _service.ApproveStudentAsync(userId, new StudentApprovalDto { Status = 1 });
+            if (result) count++;
+        }
+
+        return Ok(new { message = $"Approved {count} students", count });
+    }
+
+    [HttpPost("students/bulk-reject")]
+    [Authorize(Roles = "Admin,Host")]
+    public async Task<IActionResult> BulkRejectStudents([FromBody] List<int> userIds)
+    {
+        if (userIds is null || userIds.Count == 0)
+            return BadRequest(new { message = "No users provided" });
+
+        var count = 0;
+        foreach (var userId in userIds)
+        {
+            var result = await _service.ApproveStudentAsync(userId, new StudentApprovalDto { Status = 2 });
+            if (result) count++;
+        }
+
+        return Ok(new { message = $"Rejected {count} students", count });
+    }
 }

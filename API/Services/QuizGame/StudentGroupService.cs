@@ -1,5 +1,4 @@
 using API.Data;
-using API.Data;
 using API.DTOs.QuizGame;
 using API.Entities;
 using API.Entities.QuizGame;
@@ -140,6 +139,7 @@ public class StudentGroupService : IStudentGroupService
 
         var users = await _userManager.Users
             .Where(u => newUserIds.Contains(u.Id))
+            .Where(u => u.UserRoles.Any(ur => ur.Role.Name == "Player"))
             .ToListAsync();
 
         foreach (var user in users)
@@ -187,10 +187,18 @@ public class StudentGroupService : IStudentGroupService
     public async Task<PagedResultDto<StudentListDto>> GetStudentsAsync(StudentQueryDto query)
     {
         var queryable = _context.Users
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
             .Include(u => u.GroupMemberships)
                 .ThenInclude(m => m.StudentGroup)
             .Where(u => !u.IsDeleted)
             .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query.Role))
+        {
+            var normalizedRole = query.Role.Trim().ToLower();
+            queryable = queryable.Where(u => u.UserRoles.Any(ur => ur.Role.Name.ToLower() == normalizedRole));
+        }
 
         if (query.Status.HasValue)
         {
@@ -225,6 +233,9 @@ public class StudentGroupService : IStudentGroupService
                 Email = u.Email ?? "",
                 FirstName = u.FirstName,
                 LastName = u.LastName,
+                Role = u.UserRoles
+                    .Select(ur => ur.Role.Name)
+                    .FirstOrDefault() ?? string.Empty,
                 Status = u.Status,
                 StatusName = ((StudentStatus)u.Status).ToString(),
                 RegisterTime = u.RegisterTime,
