@@ -53,11 +53,21 @@ import { ToastService } from '../../core/services/toast.service';
       @if (selectedIds.size > 0) {
         <div class="bulk-actions-bar">
           <span class="selection-count">{{ selectedIds.size }} selected</span>
-          <button type="button" class="secondary" (click)="clearSelection()">Clear</button>
-          <button type="button" (click)="bulkExport()">Export</button>
-          <button type="button" (click)="bulkPublish()">Publish</button>
-          <button type="button" (click)="bulkUnpublish()">Unpublish</button>
-          <button type="button" class="danger" (click)="bulkDelete()">Delete</button>
+          <div class="bulk-actions-desktop">
+            <button type="button" class="secondary" (click)="clearSelection()">Clear</button>
+            <button type="button" (click)="bulkExport()">Export</button>
+            <button type="button" (click)="bulkPublish()">Publish</button>
+            <button type="button" (click)="bulkUnpublish()">Unpublish</button>
+            <button type="button" class="danger" (click)="bulkDelete()">Delete</button>
+          </div>
+          <select class="bulk-actions-mobile" (change)="onBulkActionSelected($event)">
+            <option value="">Actions</option>
+            <option value="clear">Clear</option>
+            <option value="export">Export</option>
+            <option value="publish">Publish</option>
+            <option value="unpublish">Unpublish</option>
+            <option value="delete">Delete</option>
+          </select>
         </div>
       }
 
@@ -81,10 +91,19 @@ import { ToastService } from '../../core/services/toast.service';
                 <td>{{ marksLabel(quiz) }}</td>
                 <td>{{ quiz.isPublished ? 'Published' : 'Draft' }}</td>
                 <td class="table-actions">
-                  <button type="button" class="secondary" (click)="exportQuiz(quiz.id)">Export</button>
-                  <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
-                  <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
-                  <button type="button" class="danger" (click)="remove(quiz.id)">Delete</button>
+                  <div class="row-actions-desktop">
+                    <button type="button" class="secondary" (click)="exportQuiz(quiz.id)">Export</button>
+                    <a [routerLink]="['/quizzes', quiz.id, 'edit']"><button type="button" class="secondary">Edit</button></a>
+                    <button type="button" (click)="togglePublish(quiz)">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</button>
+                    <button type="button" class="danger" (click)="remove(quiz.id)">Delete</button>
+                  </div>
+                  <select class="row-actions-mobile" (change)="onRowActionSelected($event, quiz.id)">
+                    <option value="">Actions</option>
+                    <option value="export">Export</option>
+                    <option value="edit">Edit</option>
+                    <option value="publish">{{ quiz.isPublished ? 'Unpublish' : 'Publish' }}</option>
+                    <option value="delete">Delete</option>
+                  </select>
                 </td>
               </tr>
             }
@@ -206,12 +225,50 @@ padding: 10px 16px;
       background: var(--surface-elevated);
       border-radius: 12px;
       border: 1px solid var(--border);
+      flex-wrap: wrap;
     }
 
     .selection-count {
       font-weight: 600;
       color: var(--text);
       margin-right: auto;
+      white-space: nowrap;
+    }
+
+    .bulk-actions-desktop {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-actions-mobile {
+      display: none;
+      min-height: 36px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .row-actions-desktop {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .row-actions-mobile {
+      display: none;
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
     }
 
     .bulk-actions-bar button {
@@ -363,20 +420,57 @@ padding: 10px 16px;
     }
 
     @media (max-width: 760px) {
-      .filters-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .desktop-table {
+      .bulk-actions-desktop {
         display: none;
       }
 
+      .bulk-actions-mobile {
+        display: inline-block;
+      }
+
+      .row-actions-desktop {
+        display: none;
+      }
+
+      .row-actions-mobile {
+        display: inline-block;
+      }
+
+      .table-actions {
+        min-width: 100px;
+      }
+
+      .desktop-table {
+        display: block;
+      }
+
       .mobile-list {
-        display: grid;
+        display: none;
       }
     }
 
     @media (max-width: 520px) {
+      .bulk-actions-bar {
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      .bulk-actions-mobile {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 0.85rem;
+      }
+
+      .row-actions-mobile {
+        min-height: 28px;
+        padding: 4px 8px;
+        font-size: 0.8rem;
+      }
+
+      .selection-count {
+        font-size: 0.9rem;
+      }
+
       .mobile-head {
         flex-direction: column;
         align-items: stretch;
@@ -577,5 +671,54 @@ export class QuizzesListComponent implements OnInit {
     }
 
     return effectiveMarks > 0 ? `${effectiveMarks} auto` : '-';
+  }
+
+  onBulkActionSelected(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const action = select.value;
+    if (!action) return;
+
+    switch (action) {
+      case 'clear':
+        this.clearSelection();
+        break;
+      case 'export':
+        this.bulkExport();
+        break;
+      case 'publish':
+        this.bulkPublish();
+        break;
+      case 'unpublish':
+        this.bulkUnpublish();
+        break;
+      case 'delete':
+        this.bulkDelete();
+        break;
+    }
+    select.value = '';
+  }
+
+  onRowActionSelected(event: Event, quizId: number): void {
+    const select = event.target as HTMLSelectElement;
+    const action = select.value;
+    if (!action) return;
+
+    const quiz = this.items.find(q => q.id === quizId);
+    if (!quiz) return;
+
+    switch (action) {
+      case 'export':
+        this.exportQuiz(quizId);
+        break;
+      case 'edit':
+        break;
+      case 'publish':
+        this.togglePublish(quiz);
+        break;
+      case 'delete':
+        this.remove(quizId);
+        break;
+    }
+    select.value = '';
   }
 }

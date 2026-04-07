@@ -694,7 +694,7 @@ import { environment } from '../../../environments/environment';
       .exam-topbar,
       .exam-board,
       .result-card {
-        padding: 16px;
+        padding: 12px;
       }
 
       .question-map {
@@ -711,10 +711,71 @@ import { environment } from '../../../environments/environment';
       }
 
       .question-chip {
-        width: 34px;
-        min-width: 34px;
-        height: 34px;
-        min-height: 34px;
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
+        min-height: 28px;
+        font-size: 0.8rem;
+      }
+
+      .exam-header h2,
+      .exam-timer {
+        font-size: 1rem;
+      }
+
+      .exam-timer {
+        padding: 6px 10px;
+      }
+
+      .question-text {
+        font-size: 0.95rem;
+      }
+
+      .answer-option {
+        padding: 10px 12px;
+        font-size: 0.9rem;
+      }
+
+      .result-card h2 {
+        font-size: 1.2rem;
+      }
+
+      .result-card .score-value {
+        font-size: 2rem;
+      }
+
+      .result-card .score-label {
+        font-size: 0.85rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .question-panel,
+      .exam-topbar,
+      .exam-board,
+      .result-card {
+        padding: 10px;
+      }
+
+      .question-chip {
+        width: 24px;
+        min-width: 24px;
+        height: 24px;
+        min-height: 24px;
+        font-size: 0.7rem;
+      }
+
+      .question-text {
+        font-size: 0.88rem;
+      }
+
+      .answer-option {
+        padding: 8px 10px;
+        font-size: 0.85rem;
+      }
+
+      .result-card .score-value {
+        font-size: 1.8rem;
       }
     }
   `]

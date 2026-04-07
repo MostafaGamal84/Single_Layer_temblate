@@ -110,6 +110,8 @@ public class AuthController : ControllerBase
         {
             Id = user.Id,
             Email = user.Email ?? string.Empty,
+            FirstName = user.FirstName ?? string.Empty,
+            LastName = user.LastName ?? string.Empty,
             Roles = roles,
             Token = _tokenService.CreateToken(user, roles),
             Status = user.Status

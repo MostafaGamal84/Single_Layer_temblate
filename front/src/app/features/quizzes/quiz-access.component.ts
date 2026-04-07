@@ -402,10 +402,10 @@ import { ToastService } from '../../core/services/toast.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       border: 2px solid var(--border);
-      border-radius: 6px;
+      border-radius: 4px;
       background: var(--surface);
       flex-shrink: 0;
     }
@@ -416,9 +416,32 @@ import { ToastService } from '../../core/services/toast.service';
     }
 
     .select-checkbox svg {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       color: white;
+    }
+
+    @media (max-width: 760px) {
+      .select-checkbox {
+        width: 18px;
+        height: 18px;
+      }
+      .select-checkbox svg {
+        width: 11px;
+        height: 11px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .select-checkbox {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+      }
+      .select-checkbox svg {
+        width: 10px;
+        height: 10px;
+      }
     }
 
     .select-info { 

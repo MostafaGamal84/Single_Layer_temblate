@@ -209,19 +209,21 @@ type EditableChoice = {
               </div>
 
               @if (usesSingleCorrect()) {
-                <label class="correct-mark">
-                  <input
-                    type="radio"
-                    name="singleCorrectChoice"
-                    [checked]="choice.isCorrect"
-                    (change)="setSingleCorrectChoice($index)" />
-                  Correct
-                </label>
+                <button 
+                  type="button" 
+                  class="correct-mark" 
+                  [class.correct]="choice.isCorrect"
+                  (click)="setSingleCorrectChoice($index)">
+                  {{ choice.isCorrect ? '✓ Correct' : 'Mark as Correct' }}
+                </button>
               } @else {
-                <label class="correct-mark">
-                  <input type="checkbox" [(ngModel)]="choice.isCorrect" [name]="'questionChoiceCorrect' + $index" />
-                  Correct
-                </label>
+                <button 
+                  type="button" 
+                  class="correct-mark" 
+                  [class.correct]="choice.isCorrect"
+                  (click)="choice.isCorrect = !choice.isCorrect">
+                  {{ choice.isCorrect ? '✓ Correct' : 'Mark as Correct' }}
+                </button>
               }
 
               @if (questionMode === 'single' || questionMode === 'multiple') {
@@ -355,12 +357,57 @@ type EditableChoice = {
       align-items: center;
       gap: 8px;
       white-space: nowrap;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-soft);
+      font-size: 0.85rem;
+      transition: all 0.15s ease;
+    }
+
+    .correct-mark:hover {
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+
+    .correct-mark input[type="radio"],
+    .correct-mark input[type="checkbox"] {
+      display: none;
+    }
+
+    .correct-mark.correct {
+      background: var(--primary-tint);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    @media (max-width: 820px) {
+      .correct-mark {
+        padding: 5px 8px;
+        font-size: 0.8rem;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .correct-mark {
+        padding: 4px 6px;
+        font-size: 0.75rem;
+      }
     }
 
     .action-row {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
+    }
+
+    .choice-row input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: var(--primary);
     }
 
     @media (max-width: 820px) {
@@ -380,6 +427,18 @@ type EditableChoice = {
       .choice-code {
         width: 100%;
         border-radius: 14px;
+      }
+
+      .correct-mark {
+        padding: 5px 8px;
+        font-size: 0.8rem;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .correct-mark {
+        padding: 4px 6px;
+        font-size: 0.75rem;
       }
     }
 

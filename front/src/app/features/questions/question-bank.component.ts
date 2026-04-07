@@ -298,10 +298,24 @@ import { PagedResult, Question } from '../../core/models';
     }
 
     .row-select input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       cursor: pointer;
       accent-color: var(--primary);
+    }
+
+    @media (max-width: 760px) {
+      .row-select input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .row-select input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+      }
     }
 
     .row-content {
@@ -608,6 +622,18 @@ import { PagedResult, Question } from '../../core/models';
       }
     }
 
+    @media (max-width: 760px) {
+      .question-item {
+        padding: 12px;
+      }
+      .row-title {
+        font-size: 0.95rem;
+      }
+      .row-text {
+        font-size: 0.88rem;
+      }
+    }
+
     @media (max-width: 600px) {
       .page-header {
         flex-direction: column;
@@ -621,6 +647,19 @@ import { PagedResult, Question } from '../../core/models';
       }
       .row-actions {
         flex-wrap: wrap;
+      }
+      .question-item {
+        padding: 10px;
+      }
+      .row-title {
+        font-size: 0.9rem;
+      }
+      .row-text {
+        font-size: 0.82rem;
+      }
+      .row-select input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
       }
     }
   `]

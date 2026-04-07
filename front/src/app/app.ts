@@ -19,10 +19,7 @@ export class App {
 
   readonly currentThemeLabel = computed(() => this.theme.isDark() ? 'Light Mode' : 'Dark Mode');
   readonly themeActionLabel = computed(() => this.theme.isDark() ? 'Light' : 'Dark');
-  readonly userName = computed(() => {
-    const id = this.auth.userId();
-    return id ? `U${id}` : 'User';
-  });
+  readonly userName = computed(() => this.auth.getFullName() || 'User');
   readonly userRole = computed(() => this.auth.role() || 'User');
   readonly menuButtonLabel = computed(() => this.mobileSidebarOpen() ? 'Close menu' : 'Open menu');
   readonly menuButtonText = computed(() => this.mobileSidebarOpen() ? 'Close' : 'Menu');

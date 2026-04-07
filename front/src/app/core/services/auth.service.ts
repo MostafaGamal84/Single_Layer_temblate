@@ -16,6 +16,8 @@ export interface RegisterRequest {
 export interface AuthResponse {
   id: number;
   email: string;
+  firstName?: string;
+  lastName?: string;
   token: string;
   roles: string[];
   status: number;
@@ -33,11 +35,15 @@ export class AuthService {
   private readonly roleKey = 'quiz_role';
   private readonly userIdKey = 'quiz_user_id';
   private readonly statusKey = 'quiz_status';
+  private readonly firstNameKey = 'quiz_first_name';
+  private readonly lastNameKey = 'quiz_last_name';
   private readonly isBrowser: boolean;
   readonly token = signal<string | null>(null);
   readonly role = signal<string | null>(null);
   readonly userId = signal<number | null>(null);
   readonly status = signal<number>(1);
+  readonly firstName = signal<string | null>(null);
+  readonly lastName = signal<string | null>(null);
   readonly permissions = signal<{ [key: string]: boolean }>({});
 
   constructor(
@@ -50,12 +56,16 @@ export class AuthService {
     const storedRole = this.readStorage(this.roleKey);
     const storedUserId = this.readStorage(this.userIdKey);
     const storedStatus = this.readStorage(this.statusKey);
+    const storedFirstName = this.readStorage(this.firstNameKey);
+    const storedLastName = this.readStorage(this.lastNameKey);
     const hasValidStoredToken = !!storedToken && !this.isTokenExpired(storedToken);
 
     this.token.set(hasValidStoredToken ? storedToken : null);
     this.role.set(hasValidStoredToken ? storedRole : null);
     this.userId.set(storedUserId ? parseInt(storedUserId, 10) : null);
     this.status.set(storedStatus ? parseInt(storedStatus, 10) : 1);
+    this.firstName.set(storedFirstName || null);
+    this.lastName.set(storedLastName || null);
 
     if (storedToken && !hasValidStoredToken) {
       this.clearSession();
@@ -76,9 +86,21 @@ export class AuthService {
         const token = (res as any)?.token ?? (res as any)?.Token;
         if (token) {
           this.setSession(token, this.pickRoleFromResponse(res), (res as any)?.id, (res as any)?.status);
+          const first = ((res as any)?.firstName || '').trim();
+          const last = ((res as any)?.lastName || '').trim();
+          this.firstName.set(first || null);
+          this.lastName.set(last || null);
+          this.writeStorage(this.firstNameKey, first || '');
+          this.writeStorage(this.lastNameKey, last || '');
         }
       })
     );
+  }
+
+  getFullName(): string {
+    const first = this.firstName();
+    const last = this.lastName();
+    return first && last ? `${first} ${last}` : first || last || '';
   }
 
   register(payload: RegisterRequest): Observable<AuthResponse> {
@@ -144,10 +166,14 @@ export class AuthService {
     this.removeStorage(this.roleKey);
     this.removeStorage(this.userIdKey);
     this.removeStorage(this.statusKey);
+    this.removeStorage(this.firstNameKey);
+    this.removeStorage(this.lastNameKey);
     this.token.set(null);
     this.role.set(null);
     this.userId.set(null);
     this.status.set(1);
+    this.firstName.set(null);
+    this.lastName.set(null);
     this.permissions.set({});
     this.router.navigate(['/auth/login']);
   }
@@ -239,10 +265,14 @@ export class AuthService {
     this.removeStorage(this.roleKey);
     this.removeStorage(this.userIdKey);
     this.removeStorage(this.statusKey);
+    this.removeStorage(this.firstNameKey);
+    this.removeStorage(this.lastNameKey);
     this.token.set(null);
     this.role.set(null);
     this.userId.set(null);
     this.status.set(1);
+    this.firstName.set(null);
+    this.lastName.set(null);
   }
 }
 

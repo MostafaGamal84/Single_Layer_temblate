@@ -308,6 +308,27 @@ import { PagedResult } from '../../core/models';
     .student-info strong { font-size: 0.9rem; }
     .student-info span { font-size: 0.8rem; color: var(--muted); }
 
+    .student-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    @media (max-width: 760px) {
+      .student-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .student-item input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
     .no-members, .no-results, .loading { text-align: center; color: var(--muted); padding: 20px; }
 
     @media (max-width: 760px) {

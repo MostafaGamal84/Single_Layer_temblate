@@ -599,10 +599,10 @@ interface CategoryWithCount {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       border: 2px solid var(--border);
-      border-radius: 6px;
+      border-radius: 4px;
       background: var(--surface);
       flex-shrink: 0;
     }
@@ -613,9 +613,32 @@ interface CategoryWithCount {
     }
 
     .bank-checkbox svg {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       color: white;
+    }
+
+    @media (max-width: 760px) {
+      .bank-checkbox {
+        width: 18px;
+        height: 18px;
+      }
+      .bank-checkbox svg {
+        width: 11px;
+        height: 11px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .bank-checkbox {
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+      }
+      .bank-checkbox svg {
+        width: 10px;
+        height: 10px;
+      }
     }
 
     .bank-question-content { 

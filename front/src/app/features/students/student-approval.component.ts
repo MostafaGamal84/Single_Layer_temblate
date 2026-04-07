@@ -7,6 +7,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { PagedResult } from '../../core/models';
 import { AuthService } from '../../core/services/auth.service';
 import { UserPermissionService } from '../../core/services/user-permission.service';
+import { MultiSelectComponent } from '../../shared/multi-select.component';
 
 interface ManagedUser {
   id: number;
@@ -25,7 +26,7 @@ type PermissionMap = { [key: string]: boolean };
 @Component({
   standalone: true,
   selector: 'app-student-approval',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MultiSelectComponent],
   template: `
     <div class="users-page">
       <div class="page-header">
@@ -177,34 +178,12 @@ type PermissionMap = { [key: string]: boolean };
                   </td>
                   <td>
                     @if (isAdmin() && user.role !== 'Admin') {
-                      <div class="permission-cell" (click)="$event.stopPropagation()">
-                        <div class="permission-dropdown">
-                          <button type="button" class="secondary permission-trigger" (click)="toggleUserPermissionMenu(user.id, $event)">
-                            {{ permissionSummary(user) }}
-                          </button>
-
-                          @if (openPermissionUserId === user.id) {
-                            <div class="permission-menu">
-                              <div class="permission-menu-head">
-                                <strong>User Permissions</strong>
-                                <button type="button" class="secondary permission-clear" (click)="clearUserPermissions(user.id, $event)">Clear</button>
-                              </div>
-
-                              @for (permission of permissionOptions; track permission.key) {
-                                <label class="permission-option">
-                                  <input
-                                    type="checkbox"
-                                    [checked]="userPermissionDrafts[user.id]?.[permission.key] === true"
-                                    (change)="toggleUserPermission(user.id, permission.key)" />
-                                  <span>{{ permission.label }}</span>
-                                </label>
-                              }
-                            </div>
-                          }
-                        </div>
-
-                        <button type="button" class="secondary" (click)="savePermissions(user)">Apply</button>
-                      </div>
+                      <app-multi-select
+                        [options]="permissionOptionsForSelect()"
+                        [placeholder]="permissionSummary(user)"
+                        [initialValues]="getSelectedPermissions(user.id)"
+                        (selectionChange)="onPermissionsChange(user.id, $event)">
+                      </app-multi-select>
                     } @else {
                       <span class="permission-summary">{{ permissionSummary(user) }}</span>
                     }
@@ -280,8 +259,8 @@ type PermissionMap = { [key: string]: boolean };
       background: var(--surface-soft);
     }
 
-    .users-table { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; background: var(--surface); }
+    .users-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; min-width: 600px; border-collapse: collapse; background: var(--surface); }
     th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
     th {
       background: var(--surface-soft);
@@ -294,9 +273,10 @@ type PermissionMap = { [key: string]: boolean };
     tr:last-child td { border-bottom: none; }
     tr.selected { background: var(--info-tint); }
 
-    .user-name { display: grid; gap: 2px; }
-    .user-name span, .user-name small { color: var(--muted); }
-    .user-name small { font-size: 0.8rem; }
+    .user-name { display: flex; gap: 4px; flex-wrap: wrap; align-items: baseline; }
+    .user-name strong { font-size: 0.95rem; }
+    .user-name span, .user-name small { color: var(--muted); font-size: 0.8rem; }
+    .user-name small { display: block; }
 
     .role-badge, .status-badge, .group-chip, .permission-summary {
       display: inline-flex;
@@ -318,83 +298,42 @@ type PermissionMap = { [key: string]: boolean };
     .group-chip { color: var(--info); border-color: var(--info-border); background: var(--info-tint); }
     .no-groups { font-size: 0.8rem; color: var(--muted); }
 
-    .permission-cell {
-      display: grid;
-      grid-template-columns: minmax(180px, 1fr) auto;
-      gap: 8px;
-      align-items: start;
-    }
-
-    .permission-dropdown {
-      position: relative;
-      min-width: 220px;
-    }
-
-    .permission-trigger {
+    app-multi-select {
       width: 100%;
-      justify-content: space-between;
-      text-align: left;
+      display: block;
     }
 
-    .permission-menu {
-      position: absolute;
-      top: calc(100% + 8px);
-      left: 0;
-      width: min(320px, 70vw);
-      max-height: 320px;
-      overflow-y: auto;
-      padding: 12px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      box-shadow: var(--shadow-soft);
-      z-index: 20;
-      display: grid;
-      gap: 8px;
+    .permission-summary {
+      font-size: 0.85rem;
     }
 
-    .bulk-dropdown .permission-menu {
-      left: auto;
-      right: 0;
-    }
-
-    .permission-menu-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .permission-option {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 0;
-      cursor: pointer;
-      color: var(--text);
-      font-size: 0.88rem;
-    }
-
-    .permission-option input {
-      width: 16px;
-      height: 16px;
-      margin: 0;
-    }
-
-    .permission-clear {
-      min-height: 32px;
-      padding: 6px 10px;
-      font-size: 0.78rem;
-    }
-
-    .action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
     .success-btn {
       border: 1px solid var(--success-border);
       background: var(--success-tint);
       color: var(--success);
     }
     .col-check { width: 42px; text-align: center; }
+    .col-check input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    @media (max-width: 760px) {
+      .col-check input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .col-check input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+      }
+    }
+
     .pagination { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 12px; }
 
     @media (max-width: 1100px) {
@@ -402,17 +341,32 @@ type PermissionMap = { [key: string]: boolean };
       .field-search { grid-column: 1 / -1; }
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 760px) {
       .filters-grid { grid-template-columns: 1fr; }
-      .bulk-actions-bar { align-items: stretch; }
+      .bulk-actions-bar { align-items: stretch; flex-wrap: wrap; }
       .bulk-actions-bar span { margin-right: 0; width: 100%; }
-      .permission-cell { grid-template-columns: 1fr; }
-      .permission-dropdown { min-width: 0; }
-      .permission-menu {
-        position: static;
-        width: 100%;
-        margin-top: 8px;
+      table { font-size: 0.8rem; min-width: 550px; }
+      th, td { padding: 8px; }
+      th { font-size: 0.65rem; }
+      .user-name { gap: 3px; }
+      .user-name strong { font-size: 0.85rem; }
+      .user-name span, .user-name small { font-size: 0.7rem; }
+    }
+
+    @media (max-width: 520px) {
+      table { font-size: 0.7rem; min-width: 500px; }
+      th, td { padding: 6px; }
+      th { font-size: 0.6rem; }
+      .col-check { width: 28px; }
+      .col-check input[type="checkbox"] {
+        width: 14px;
+        height: 14px;
       }
+      .user-name { flex-direction: column; gap: 2px; }
+      .user-name strong { font-size: 0.8rem; }
+      .user-name span, .user-name small { font-size: 0.65rem; }
+      .user-name strong { font-size: 0.85rem; }
+      .user-name span, .user-name small { font-size: 0.7rem; }
     }
   `]
 })
@@ -456,6 +410,10 @@ export class StudentApprovalComponent implements OnInit {
     { key: 'AddRemoveStudentsToGroups', label: 'Manage Student Groups' },
     { key: 'ManageLiveClasses', label: 'Manage Live Classes' }
   ];
+
+  readonly permissionOptionsForSelect = computed(() => 
+    this.permissionOptions.map(p => ({ value: p.key, label: p.label }))
+  );
 
   readonly permissionKeys = this.permissionOptions.map(permission => permission.key);
   bulkPermissionDraft: PermissionMap = this.createEmptyPermissionMap();
@@ -727,6 +685,23 @@ export class StudentApprovalComponent implements OnInit {
     const permissions = this.userPermissionDrafts[user.id] || this.permissionMaps[user.id];
     const count = this.countSelectedPermissions(permissions);
     return count === 0 ? 'No permissions selected' : `${count} permissions selected`;
+  }
+
+  getSelectedPermissions(userId: number): string[] {
+    const permissions = this.userPermissionDrafts[userId] || this.permissionMaps[userId];
+    if (!permissions) return [];
+    return Object.keys(permissions).filter(key => permissions[key]);
+  }
+
+  onPermissionsChange(userId: number, selectedPermissions: any[]): void {
+    this.ensureUserPermissionDraft(userId);
+    const draft = this.userPermissionDrafts[userId];
+    
+    // Clear all and set selected
+    Object.keys(draft).forEach(key => draft[key] = false);
+    selectedPermissions.forEach(key => draft[key] = true);
+    
+    this.savePermissions({ id: userId } as ManagedUser);
   }
 
   bulkPermissionSummary(): string {
