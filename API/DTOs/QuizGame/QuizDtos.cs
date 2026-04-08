@@ -68,6 +68,12 @@ public class QuizPublishDto
     public bool IsPublished { get; set; }
 }
 
+public class BulkQuizCategoryDto
+{
+    public List<int> Ids { get; set; } = new();
+    public string CategoryName { get; set; } = string.Empty;
+}
+
 public class QuizQueryDto : PagedRequestDto
 {
     public QuizMode? Mode { get; set; }

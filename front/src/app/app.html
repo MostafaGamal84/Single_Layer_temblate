@@ -5,27 +5,38 @@
   [class.sidebar-open]="showMenu() && mobileSidebarOpen()">
   @if (showMenu()) {
     <aside class="sidebar" [class.sidebar-open]="mobileSidebarOpen()">
-      <div class="sidebar-brand">
-        <div class="brand-mark">QZ</div>
+      <div class="sidebar-mobile-top">
         <button type="button" class="sidebar-close" (click)="closeSidebar()" aria-label="Close menu">
-          ✕
+          <i class="pi pi-times" aria-hidden="true"></i>
         </button>
+      </div>
+
+      <div class="sidebar-brand">
+        <div class="brand-mark">
+          <img src="/logo.jpeg" alt="GOUDAPREP logo" class="brand-logo" />
+        </div>
+        <div class="brand-copy">
+          <span class="brand-kicker">Learning Platform</span>
+          <h2>GOUDAPREP</h2>
+          <p>Smart prep for every test</p>
+        </div>
       </div>
 
       <nav class="sidebar-menu">
         @if (auth.role() === 'Admin' || auth.role() === 'Host') {
-          <a routerLink="/quizzes" routerLinkActive="active" (click)="closeSidebar()">
-            <i class="pi pi-objects-column nav-icon" aria-hidden="true"></i>
-            <span class="nav-copy">
-              <span>Tests</span>
-              <small>Build reusable test banks</small>
-            </span>
-          </a>
+         
           <a routerLink="/questions" routerLinkActive="active" (click)="closeSidebar()">
             <i class="pi pi-book nav-icon" aria-hidden="true"></i>
             <span class="nav-copy">
               <span>Question Bank</span>
               <small>Craft and refine your library</small>
+            </span>
+          </a>
+           <a routerLink="/quizzes" routerLinkActive="active" (click)="closeSidebar()">
+            <i class="pi pi-objects-column nav-icon" aria-hidden="true"></i>
+            <span class="nav-copy">
+              <span>Tests</span>
+              <small>Build reusable test banks</small>
             </span>
           </a>
           <a routerLink="/students/groups" routerLinkActive="active" (click)="closeSidebar()">
@@ -123,7 +134,7 @@
            (touchstart)="closeSidebar()"></div>
     }
 
-    @if (!mobileSidebarOpen()) {
+    @if (showMenu() && !mobileSidebarOpen()) {
       <button
         type="button"
         class="secondary menu-toggle menu-toggle-floating"

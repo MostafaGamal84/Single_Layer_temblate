@@ -250,6 +250,33 @@ public class QuizzesController : ControllerBase
     }
 
     [Authorize(Roles = "Admin,Host")]
+    [HttpPost("bulk-add-category")]
+    public async Task<IActionResult> BulkAddCategory([FromBody] BulkQuizCategoryDto dto)
+    {
+        if (dto.Ids is null || dto.Ids.Count == 0)
+        {
+            return BadRequest(new { message = "No IDs provided" });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.CategoryName))
+        {
+            return BadRequest(new { message = "Category name is required" });
+        }
+
+        var added = await _service.AddCategoryToQuizzesAsync(dto.Ids, dto.CategoryName);
+        var categoryName = dto.CategoryName.Trim();
+
+        return Ok(new
+        {
+            message = added > 0
+                ? $"Category '{categoryName}' added to {added} quizzes"
+                : $"Selected quizzes already include '{categoryName}'",
+            updatedCount = added,
+            categoryName
+        });
+    }
+
+    [Authorize(Roles = "Admin,Host")]
     [HttpPost("bulk-export")]
     public async Task<IActionResult> BulkExport([FromBody] List<int> ids)
     {

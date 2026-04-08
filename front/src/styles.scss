@@ -1622,6 +1622,30 @@ tbody tr:hover td {
   background: var(--auth-hero-bg);
 }
 
+.auth-brand {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.auth-brand-copy {
+  width: 100%;
+}
+
+.auth-brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 14px;
+  box-sizing: border-box;
+  box-shadow: var(--shadow-card);
+}
+
 .auth-hero::after {
   content: '';
   position: absolute;
@@ -1764,6 +1788,13 @@ tbody tr:hover td {
 
 .auth-switch a {
   font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .auth-brand-logo {
+    border-radius: 18px;
+    padding: 10px;
+  }
 }
 
 

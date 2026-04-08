@@ -234,13 +234,14 @@ import { of, switchMap } from 'rxjs';
     .stepper-step {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       background: none;
       border: none;
       cursor: pointer;
-      padding: 8px 12px;
+      padding: 6px 8px;
       border-radius: 8px;
       color: var(--muted);
+      flex-shrink: 0;
     }
 
     .stepper-step.active {
@@ -252,8 +253,8 @@ import { of, switchMap } from 'rxjs';
     }
 
     .step-number {
-      width: 28px;
-      height: 28px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       background: var(--surface);
       border: 2px solid var(--border);
@@ -261,7 +262,8 @@ import { of, switchMap } from 'rxjs';
       align-items: center;
       justify-content: center;
       font-weight: 600;
-      font-size: 0.85rem;
+      font-size: 0.75rem;
+      flex-shrink: 0;
     }
 
     .stepper-step.active .step-number {
@@ -272,7 +274,8 @@ import { of, switchMap } from 'rxjs';
 
     .step-label {
       font-weight: 500;
-      font-size: 0.9rem;
+      font-size: 0.75rem;
+      white-space: nowrap;
     }
 
     .step-content {
@@ -404,7 +407,26 @@ import { of, switchMap } from 'rxjs';
       flex-wrap: wrap;
     }
 
-    @media (max-width: 760px) {
+    @media (max-width: 600px) {
+      .stepper-steps {
+        justify-content: space-between;
+        overflow-x: auto;
+      }
+
+      .step-label {
+        display: none;
+      }
+
+      .stepper-step {
+        padding: 6px;
+      }
+
+      .step-number {
+        width: 28px;
+        height: 28px;
+        font-size: 0.85rem;
+      }
+
       .form-grid {
         grid-template-columns: 1fr;
       }

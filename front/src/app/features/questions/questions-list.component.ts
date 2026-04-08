@@ -142,6 +142,7 @@ import { ToastService } from '../../core/services/toast.service';
 
     .desktop-table {
       display: block;
+      min-height: 400px;
     }
 
     .table-actions {
@@ -152,6 +153,7 @@ import { ToastService } from '../../core/services/toast.service';
     .mobile-list {
       display: none;
       gap: 10px;
+      min-height: 300px;
     }
 
     .mobile-item {

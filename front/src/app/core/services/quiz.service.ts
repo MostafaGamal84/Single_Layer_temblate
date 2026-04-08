@@ -97,6 +97,10 @@ export class QuizService {
     return this.http.post<any>(`${this.base}/bulk-publish`, { ids, publish });
   }
 
+  bulkAddCategory(ids: number[], categoryName: string) {
+    return this.http.post<any>(`${this.base}/bulk-add-category`, { ids, categoryName });
+  }
+
   bulkExport(ids: number[]) {
     return this.http.post(`${this.base}/bulk-export`, ids, {
       responseType: 'blob'

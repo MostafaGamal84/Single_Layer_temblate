@@ -12,24 +12,29 @@ import { AuthService } from '../../core/services/auth.service';
     <div class="auth-shell">
       <div class="auth-panel">
         <section class="auth-hero">
-          <p class="auth-eyebrow">Midnight Control Suite</p>
-          <h1>Welcome back to the control room.</h1>
+          <div class="auth-brand">
+            <img src="/logo.jpeg" alt="GOUDAPREP logo" class="auth-brand-logo" />
+            <div class="auth-brand-copy">
+              <p class="auth-eyebrow">GOUDAPREP</p>
+              <h1>Welcome back to GOUDAPREP.</h1>
+            </div>
+          </div>
           <p class="auth-subtitle">
-            A sharper dark interface for live sessions, player flow, and fast host decisions without visual clutter.
+            Sign in to continue your prep, manage tests, and keep every session organized in one place.
           </p>
 
           <div class="auth-chip-row">
-            <span>Realtime orchestration</span>
-            <span>Focused analytics</span>
-            <span>Fast player access</span>
+            <span>Test management</span>
+            <span>Student access</span>
+            <span>Focused practice</span>
           </div>
         </section>
 
         <section class="auth-form-wrap">
           <div class="auth-form auth-form-wide">
-            <p class="auth-form-kicker">Secure access</p>
+            <p class="auth-form-kicker">GOUDAPREP</p>
             <h2>Sign in</h2>
-            <p class="auth-form-sub">Continue to your dark dashboard and resume where you left off.</p>
+            <p class="auth-form-sub">Continue to your dashboard and pick up where you left off.</p>
 
             <div class="field">
               <label for="login-email">Email</label>
@@ -86,6 +91,34 @@ import { AuthService } from '../../core/services/auth.service';
     </div>
   `,
   styles: [`
+    .auth-brand {
+      display: grid;
+      gap: 16px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .auth-brand-logo {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 24px;
+      object-fit: contain;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 14px;
+      box-sizing: border-box;
+    }
+
+    .auth-brand-copy {
+      width: 100%;
+    }
+
+    .auth-brand-copy h1 {
+      margin: 0;
+    }
+
     .rejected-notice {
       margin-top: 20px;
       padding: 20px;
@@ -126,6 +159,13 @@ import { AuthService } from '../../core/services/auth.service';
     .rejected-note {
       font-size: 0.9rem;
       color: var(--muted) !important;
+    }
+
+    @media (max-width: 520px) {
+      .auth-brand-logo {
+        border-radius: 18px;
+        padding: 10px;
+      }
     }
   `]
 })

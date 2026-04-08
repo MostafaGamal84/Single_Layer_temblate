@@ -4,6 +4,7 @@ import { roleGuard } from './core/guards/role.guard';
 import { pendingStatusGuard } from './core/guards/pending-status.guard';
 
 export const routes: Routes = [
+  { path: '', redirectTo: '/auth/login', pathMatch: 'full' },
   { path: 'auth/login', loadComponent: () => import('./features/auth/login.component').then((m) => m.LoginComponent) },
   { path: 'auth/register', loadComponent: () => import('./features/auth/register.component').then((m) => m.RegisterComponent) },
   { path: 'auth/pending', loadComponent: () => import('./features/auth/pending-registration.component').then((m) => m.PendingRegistrationComponent) },

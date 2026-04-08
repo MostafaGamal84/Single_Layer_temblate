@@ -12,29 +12,34 @@ import { AuthService } from '../../core/services/auth.service';
     <div class="auth-shell">
       <div class="auth-panel">
         <section class="auth-hero">
-          <p class="auth-eyebrow">New account</p>
-          <h1>Create your place inside Quiz Live.</h1>
+          <div class="auth-brand">
+            <img src="/logo.jpeg" alt="GOUDAPREP logo" class="auth-brand-logo" />
+            <div class="auth-brand-copy">
+              <p class="auth-eyebrow">GOUDAPREP</p>
+              <h1>Create your account in GOUDAPREP.</h1>
+            </div>
+          </div>
           <p class="auth-subtitle">
-            Set up a host or player account with the same dark visual system used across live sessions and reports.
+            Set up a host or player account and start managing prep, tests, and student progress from one place.
           </p>
 
           <div class="auth-chip-row">
-            <span>Host dashboard</span>
-            <span>Player access</span>
+            <span>Test dashboard</span>
+            <span>Student access</span>
             <span>Fast onboarding</span>
           </div>
 
           <div class="auth-glass-card">
             <span class="auth-card-label">What you get</span>
-            <h3>One platform, two flows</h3>
-            <p><strong>Hosts</strong> control sessions, publish quizzes, and monitor the room live.</p>
-            <p><strong>Players</strong> join games, track history, and practice in test mode.</p>
+            <h3>One platform, two roles</h3>
+            <p><strong>Hosts</strong> manage tests, sessions, and reporting with a single workflow.</p>
+            <p><strong>Players</strong> join, practice, and track progress with less friction.</p>
           </div>
         </section>
 
         <section class="auth-form-wrap">
           <div class="auth-form auth-form-wide">
-            <p class="auth-form-kicker">Onboarding</p>
+            <p class="auth-form-kicker">GOUDAPREP</p>
             <h2>Create account</h2>
             <p class="auth-form-sub">Enter your details, choose a role, and continue into the platform.</p>
 
@@ -105,6 +110,34 @@ import { AuthService } from '../../core/services/auth.service';
     </div>
   `,
   styles: [`
+    .auth-brand {
+      display: grid;
+      gap: 16px;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .auth-brand-logo {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 24px;
+      object-fit: contain;
+      box-shadow: var(--shadow-card);
+      border: 1px solid var(--border);
+      background: #fff;
+      padding: 14px;
+      box-sizing: border-box;
+    }
+
+    .auth-brand-copy {
+      width: 100%;
+    }
+
+    .auth-brand-copy h1 {
+      margin: 0;
+    }
+
     .pending-notice {
       margin-top: 20px;
       padding: 20px;
@@ -160,6 +193,13 @@ import { AuthService } from '../../core/services/auth.service';
 
     .pending-link:hover {
       filter: brightness(1.1);
+    }
+
+    @media (max-width: 520px) {
+      .auth-brand-logo {
+        border-radius: 18px;
+        padding: 10px;
+      }
     }
   `]
 })

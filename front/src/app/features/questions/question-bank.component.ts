@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -20,45 +20,68 @@ import { PagedResult, Question } from '../../core/models';
           <p class="header-desc">Browse, create, and assign questions to tests</p>
         </div>
         <div class="header-actions">
-          <button type="button" class="secondary" (click)="showAssignModal = true" [disabled]="selectedQuestions.size === 0">
-            Assign to Test ({{ selectedQuestions.size }})
-          </button>
           <a routerLink="/questions/new"><button type="button">Create Question</button></a>
         </div>
       </div>
 
-      <div class="filters-bar">
-        <div class="field search-field">
-          <input
-            type="text"
-            [(ngModel)]="searchTerm"
-            placeholder="Search questions..."
-            (keyup.enter)="loadQuestions()" />
-        </div>
-        <div class="field">
-          <select [(ngModel)]="typeFilter" (change)="loadQuestions()">
-            <option [ngValue]="0">All Types</option>
-            <option [ngValue]="1">Multiple Choice</option>
-            <option [ngValue]="2">True/False</option>
-            <option [ngValue]="3">Short Answer</option>
-          </select>
-        </div>
-        <div class="field">
-          <select [(ngModel)]="modeFilter" (change)="loadQuestions()">
-            <option [ngValue]="0">All Modes</option>
-            <option [ngValue]="1">Single Answer</option>
-            <option [ngValue]="2">Multiple Answers</option>
-          </select>
-        </div>
-        <div class="field">
-          <select [(ngModel)]="categoryFilter" (change)="loadQuestions()">
-            <option [ngValue]="0">All Categories</option>
-            @for (cat of categories; track cat.id) {
-              <option [ngValue]="cat.id">{{ cat.name }}</option>
-            }
-          </select>
-        </div>
+      <div class="filter-bar">
+        <button type="button" class="filter-icon-btn" (click)="toggleFilterPopup(); $event.stopPropagation()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          <span>Filters</span>
+        </button>
+        @if (searchTerm || typeFilter || modeFilter || categoryFilter) {
+          <button type="button" class="clear-filters-btn" (click)="clearFilters()">Clear</button>
+        }
       </div>
+
+      @if (showFilterPopup) {
+        <div class="filter-popup-container">
+          <div class="filter-popup">
+            <div class="filter-popup-header">
+              <h4>Filters</h4>
+              <button type="button" class="close-filter-btn" (click)="cancelFilters()">✕</button>
+            </div>
+            <div class="filter-popup-body">
+              <div class="field">
+                <label>Search</label>
+                <input type="text" [(ngModel)]="tempSearchTerm" placeholder="Search questions..." />
+              </div>
+              <div class="field">
+                <label>Type</label>
+                <select [(ngModel)]="tempTypeFilter">
+                  <option [ngValue]="0">All Types</option>
+                  <option [ngValue]="1">Multiple Choice</option>
+                  <option [ngValue]="2">True/False</option>
+                  <option [ngValue]="3">Short Answer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Mode</label>
+                <select [(ngModel)]="tempModeFilter">
+                  <option [ngValue]="0">All Modes</option>
+                  <option [ngValue]="1">Single Answer</option>
+                  <option [ngValue]="2">Multiple Answers</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Category</label>
+                <select [(ngModel)]="tempCategoryFilter">
+                  <option [ngValue]="0">All Categories</option>
+                  @for (cat of categories; track cat.id) {
+                    <option [ngValue]="cat.id">{{ cat.name }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="filter-popup-footer">
+              <button type="button" class="secondary" (click)="cancelFilters()">Cancel</button>
+              <button type="button" (click)="applyFilters()">Apply</button>
+            </div>
+          </div>
+        </div>
+      }
 
       @if (loading) {
         <div class="loading-state">
@@ -69,9 +92,46 @@ import { PagedResult, Question } from '../../core/models';
   @if (selectedQuestions.size > 0) {
         <div class="bulk-actions-bar">
           <span>{{ selectedQuestions.size }} selected</span>
-          <button type="button" (click)="bulkExport()">Export</button>
-          <button type="button" (click)="bulkDuplicate()">Duplicate</button>
-          <button type="button" class="danger" (click)="bulkDelete()">Delete</button>
+          <div class="bulk-dropdown-container">
+            <button type="button" class="bulk-dropdown-toggle" (click)="toggleBulkDropdown(); $event.stopPropagation()">
+              Actions
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            @if (showBulkDropdown) {
+              <div class="bulk-dropdown-menu">
+                <button type="button" (click)="bulkExport(); closeBulkDropdown()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  Export
+                </button>
+                <button type="button" (click)="bulkDuplicate(); closeBulkDropdown()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  Duplicate
+                </button>
+                <button type="button" (click)="showAssignModal = true; closeBulkDropdown()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  Assign to Test
+                </button>
+                <button type="button" class="danger" (click)="bulkDelete(); closeBulkDropdown()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                  Delete
+                </button>
+              </div>
+            }
+          </div>
         </div>
       }
 
@@ -231,14 +291,132 @@ import { PagedResult, Question } from '../../core/models';
     .header-actions { display: flex; gap: 8px; align-items: center; }
     .header-actions a { text-decoration: none; }
 
-    .filters-bar {
+    .filter-bar {
       display: flex;
       gap: 10px;
+      align-items: center;
       flex-wrap: wrap;
-      padding: 14px;
-      background: var(--surface);
+    }
+
+    .filter-icon-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .filter-icon-btn:hover {
+      background: var(--surface-soft);
+      border-color: var(--border-strong);
+    }
+
+    .clear-filters-btn {
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .clear-filters-btn:hover {
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+
+    .filter-popup-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--overlay-bg);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 1000;
+      padding: 60px 16px 16px;
+      backdrop-filter: blur(4px);
+    }
+
+    .filter-popup {
+      background: var(--dialog-panel-bg);
+      border: 1px solid var(--dialog-panel-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--dialog-panel-shadow);
+      overflow: hidden;
+    }
+
+    .filter-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-popup-header h4 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .close-filter-btn {
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .close-filter-btn:hover {
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+
+    .filter-popup-body {
+      display: grid;
+      gap: 14px;
+      padding: 20px;
+    }
+
+    .filter-popup-body .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .filter-popup-body label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .filter-popup-body select, 
+    .filter-popup-body input {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      font-size: 0.9rem;
+      width: 100%;
+    }
+
+    .filter-popup-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
     }
 
     .search-field { flex: 1; min-width: 180px; }
@@ -270,6 +448,7 @@ import { PagedResult, Question } from '../../core/models';
       display: flex;
       flex-direction: column;
       gap: 12px;
+      min-height: 400px;
     }
 
 .question-row {
@@ -485,43 +664,69 @@ import { PagedResult, Question } from '../../core/models';
       font-weight: 600;
       color: var(--text);
       margin-right: auto;
-      min-width: 80px;
     }
 
-    .bulk-actions-bar button {
+    .bulk-dropdown-container {
+      position: relative;
+    }
+
+    .bulk-dropdown-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       padding: 10px 18px;
       border: 1px solid var(--border);
       cursor: pointer;
       font-weight: 500;
       font-size: 0.9rem;
-      background: var(--surface);
-      color: var(--text);
-      min-width: 80px;
-    }
-
-    .bulk-actions-bar button:hover {
-      background: var(--surface-elevated);
-    }
-
-    .bulk-actions-bar button.danger {
-      background: var(--danger);
-      color: white;
-      border-color: var(--danger);
-    }
-
-    .bulk-actions-bar button.danger:hover {
-      background: #c82333;
-      border-color: #c82333;
-    }
-
-    .bulk-actions-bar button:first-of-type {
       background: var(--primary);
       color: var(--primary-contrast);
       border-color: var(--primary);
+      border-radius: 10px;
     }
 
-    .bulk-actions-bar button:first-of-type:hover {
+    .bulk-dropdown-toggle:hover {
       background: var(--primary-hover);
+    }
+
+    .bulk-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 200px;
+      background: var(--dialog-panel-bg);
+      border: 1px solid var(--dialog-panel-border);
+      border-radius: 12px;
+      box-shadow: var(--dialog-panel-shadow);
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .bulk-dropdown-menu button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-align: left;
+      border-radius: 0;
+    }
+
+    .bulk-dropdown-menu button:hover {
+      background: var(--surface-soft);
+    }
+
+    .bulk-dropdown-menu button.danger {
+      color: var(--danger);
+    }
+
+    .bulk-dropdown-menu button.danger:hover {
+      background: var(--danger-tint);
     }
 
     .pagination {
@@ -682,6 +887,13 @@ export class QuestionBankComponent implements OnInit {
   selectedQuizId = 0;
   availableQuizzes: any[] = [];
 
+  showBulkDropdown = false;
+  showFilterPopup = false;
+  tempSearchTerm = '';
+  tempTypeFilter = 0;
+  tempModeFilter = 0;
+  tempCategoryFilter = 0;
+
   constructor(
     private questionService: QuestionService,
     private quizService: QuizService,
@@ -694,6 +906,17 @@ export class QuestionBankComponent implements OnInit {
     this.loadQuestions();
     this.loadAvailableQuizzes();
     this.loadCategories();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.bulk-dropdown-container')) {
+      this.showBulkDropdown = false;
+    }
+    if (!target.closest('.filter-popup-container') && !target.closest('.filter-icon-btn')) {
+      this.showFilterPopup = false;
+    }
   }
 
   loadCategories(): void {
@@ -749,6 +972,59 @@ export class QuestionBankComponent implements OnInit {
     this.selectedQuestions.clear();
     this.selectedQuestions.add(question.id);
     this.showAssignModal = true;
+  }
+
+  toggleBulkDropdown(): void {
+    this.showBulkDropdown = !this.showBulkDropdown;
+  }
+
+  closeBulkDropdown(): void {
+    this.showBulkDropdown = false;
+  }
+
+  toggleFilterPopup(): void {
+    if (!this.showFilterPopup) {
+      this.tempSearchTerm = this.searchTerm;
+      this.tempTypeFilter = this.typeFilter;
+      this.tempModeFilter = this.modeFilter;
+      this.tempCategoryFilter = this.categoryFilter;
+    }
+    this.showFilterPopup = !this.showFilterPopup;
+  }
+
+  closeFilterPopup(): void {
+    this.showFilterPopup = false;
+  }
+
+  applyFilters(): void {
+    this.searchTerm = this.tempSearchTerm;
+    this.typeFilter = this.tempTypeFilter;
+    this.modeFilter = this.tempModeFilter;
+    this.categoryFilter = this.tempCategoryFilter;
+    this.page = 1;
+    this.closeFilterPopup();
+    this.loadQuestions();
+  }
+
+  cancelFilters(): void {
+    this.closeFilterPopup();
+  }
+
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.typeFilter = 0;
+    this.modeFilter = 0;
+    this.categoryFilter = 0;
+    this.tempSearchTerm = '';
+    this.tempTypeFilter = 0;
+    this.tempModeFilter = 0;
+    this.tempCategoryFilter = 0;
+    this.page = 1;
+    this.loadQuestions();
+  }
+
+  closeAllDropdowns(): void {
+    this.showBulkDropdown = false;
   }
 
   assignSelectedToQuiz(): void {

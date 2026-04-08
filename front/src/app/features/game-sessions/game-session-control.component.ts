@@ -17,13 +17,13 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       @if (loading) { <p>Loading session...</p> }
 
       @if (session) {
-        <div class="row" style="justify-content:space-between;align-items:flex-start;">
-          <div>
+        <div class="header-row">
+          <div class="session-info">
             <h2>{{ session.quizTitle }}</h2>
             <p>Join Code: <b>{{ session.joinCode }}</b></p>
             <p>Join Link: <a [href]="session.joinLink" target="_blank">{{ session.joinLink }}</a></p>
           </div>
-          <div class="row">
+          <div class="control-buttons">
             <button [disabled]="!canStart()" (click)="start()">Start</button>
             <button class="secondary" [disabled]="!canPause()" (click)="pause()">Pause</button>
             <button class="secondary" [disabled]="!canResume()" (click)="resume()">Resume</button>
@@ -42,98 +42,107 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
           </div>
         </div>
 
-        <div class="row" style="margin-top:12px;">
-          <div class="card" style="min-width:min(260px,100%);">
-            <h3>Live State</h3>
-            <p>Status: {{ statusLabel(state?.status || session.status) }}</p>
-            <p>Access: {{ accessLabel(session?.accessType) }}</p>
-            <p>Flow: {{ flowModeLabel(state?.questionFlowMode ?? session.questionFlowMode) }}</p>
-            <p>Schedule: {{ scheduleLabel(session) }}</p>
-            <p>Host Voice: <b>{{ isVoiceBroadcasting ? 'Live' : 'Off' }}</b></p>
-            @if (voiceStatus) {
-              <p class="text-success" style="margin:4px 0 0;">{{ voiceStatus }}</p>
-            }
-            @if (voiceError) {
-              <p class="text-danger" style="margin:4px 0 0;">{{ voiceError }}</p>
-            }
-            @if (isTimedFlow()) {
-              <p class="text-accent">Questions auto-advance by configured answer time.</p>
-            }
-            <p>Current Index: {{ state?.currentQuestionIndex ?? session.currentQuestionIndex }}</p>
-            <p>Participants: {{ state?.participantsCount ?? session.participantsCount }}</p>
-            @if (state?.currentQuestion) {
-              <p>Current Question: <b>{{ state?.currentQuestion.title }}</b></p>
-              <div class="rich-text-content" style="margin:4px 0 0;" [innerHTML]="state?.currentQuestion.text | safeRichText"></div>
-            } @else {
-              <p>Current Question: <b>-</b></p>
-            }
-            @if (state?.nextQuestion) {
-              <p style="margin-top:8px;">Next Question: <b>{{ state?.nextQuestion.title }}</b></p>
-              <div class="rich-text-content" style="margin:4px 0 0;" [innerHTML]="state?.nextQuestion.text | safeRichText"></div>
-            } @else {
-              <p style="margin-top:8px;">Next Question: <b>-</b></p>
-            }
+        <div class="tab-nav">
+          <button type="button" [class.active]="activeTab === 'live'" (click)="activeTab = 'live'">Live State</button>
+          <button type="button" [class.active]="activeTab === 'leaderboard'" (click)="activeTab = 'leaderboard'">Leaderboard</button>
+        </div>
 
-            <h4 style="margin:12px 0 6px;">Players</h4>
-            @if (participants.length) {
-              <ul style="margin:0;padding-inline-start:18px;">
-                @for (name of participants; track name) {
-                  <li>{{ name }}</li>
-                }
-              </ul>
-            } @else {
-              <p style="margin:0;">No players joined yet.</p>
-            }
+        <div class="control-layout">
+          @if (activeTab === 'live') {
+            <div class="card live-state-card">
+              <h3>Live State</h3>
+              <p>Status: {{ statusLabel(state?.status || session.status) }}</p>
+              <p>Access: {{ accessLabel(session?.accessType) }}</p>
+              <p>Flow: {{ flowModeLabel(state?.questionFlowMode ?? session.questionFlowMode) }}</p>
+              <p>Schedule: {{ scheduleLabel(session) }}</p>
+              <p>Host Voice: <b>{{ isVoiceBroadcasting ? 'Live' : 'Off' }}</b></p>
+              @if (voiceStatus) {
+                <p class="text-success" style="margin:4px 0 0;">{{ voiceStatus }}</p>
+              }
+              @if (voiceError) {
+                <p class="text-danger" style="margin:4px 0 0;">{{ voiceError }}</p>
+              }
+              @if (isTimedFlow()) {
+                <p class="text-accent">Questions auto-advance by configured answer time.</p>
+              }
+              <p>Current Index: {{ state?.currentQuestionIndex ?? session.currentQuestionIndex }}</p>
+              <p>Participants: {{ state?.participantsCount ?? session.participantsCount }}</p>
+              @if (state?.currentQuestion) {
+                <p>Current Question: <b>{{ state?.currentQuestion.title }}</b></p>
+                <div class="rich-text-content" style="margin:4px 0 0;" [innerHTML]="state?.currentQuestion.text | safeRichText"></div>
+              } @else {
+                <p>Current Question: <b>-</b></p>
+              }
+              @if (state?.nextQuestion) {
+                <p style="margin-top:8px;">Next Question: <b>{{ state?.nextQuestion.title }}</b></p>
+                <div class="rich-text-content" style="margin:4px 0 0;" [innerHTML]="state?.nextQuestion.text | safeRichText"></div>
+              } @else {
+                <p style="margin-top:8px;">Next Question: <b>-</b></p>
+              }
 
-            <h4 style="margin:14px 0 6px;">Pending Join Requests</h4>
-            @if ((session?.accessType ?? 2) === 1) {
-              <p style="margin:0;">Public session. Participants are approved automatically.</p>
-            } @else if (pendingRequests.length) {
+              <h4 style="margin:12px 0 6px;">Players</h4>
+              @if (participants.length) {
+                <ul style="margin:0;padding-inline-start:18px;">
+                  @for (name of participants; track name) {
+                    <li>{{ name }}</li>
+                  }
+                </ul>
+              } @else {
+                <p style="margin:0;">No players joined yet.</p>
+              }
+
+              <h4 style="margin:14px 0 6px;">Pending Join Requests</h4>
+              @if ((session?.accessType ?? 2) === 1) {
+                <p style="margin:0;">Public session. Participants are approved automatically.</p>
+              } @else if (pendingRequests.length) {
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>Player</th><th>Requested</th><th>Note (optional)</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                      @for (request of pendingRequests; track request.participantId) {
+                        <tr>
+                          <td>{{ request.displayName }}</td>
+                          <td>{{ request.requestedAt | date:'short' }}</td>
+                          <td>
+                            <input
+                              [(ngModel)]="rejectNotes[request.participantId]"
+                              [disabled]="isControlDisabled()"
+                              placeholder="Reject note"
+                              class="reject-input"
+                            />
+                          </td>
+                          <td class="row actions-cell">
+                            <button [disabled]="isControlDisabled()" (click)="approveRequest(request.participantId)">Approve</button>
+                            <button class="danger" [disabled]="isControlDisabled()" (click)="rejectRequest(request.participantId)">Reject</button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              } @else {
+                <p style="margin:0;">No pending requests.</p>
+              }
+            </div>
+          }
+
+          @if (activeTab === 'leaderboard') {
+            <div class="card leaderboard-card">
+              <h3>Leaderboard</h3>
               <div class="table-wrap">
                 <table>
-                  <thead>
-                    <tr><th>Player</th><th>Requested</th><th>Note (optional)</th><th>Actions</th></tr>
-                  </thead>
+                  <thead><tr><th>#</th><th>Player</th><th>Score</th></tr></thead>
                   <tbody>
-                    @for (request of pendingRequests; track request.participantId) {
-                      <tr>
-                        <td>{{ request.displayName }}</td>
-                        <td>{{ request.requestedAt | date:'short' }}</td>
-                        <td>
-                          <input
-                            [(ngModel)]="rejectNotes[request.participantId]"
-                            [disabled]="isControlDisabled()"
-                            placeholder="Reject note"
-                            style="min-width:min(180px,100%);"
-                          />
-                        </td>
-                        <td class="row" style="gap:6px;">
-                          <button [disabled]="isControlDisabled()" (click)="approveRequest(request.participantId)">Approve</button>
-                          <button class="danger" [disabled]="isControlDisabled()" (click)="rejectRequest(request.participantId)">Reject</button>
-                        </td>
-                      </tr>
+                    @for (l of leaderboard; track l.participantId) {
+                      <tr><td>{{ l.rank }}</td><td>{{ l.displayName }}</td><td>{{ l.totalScore }}</td></tr>
                     }
                   </tbody>
                 </table>
               </div>
-            } @else {
-              <p style="margin:0;">No pending requests.</p>
-            }
-          </div>
-
-          <div class="card" style="flex:1;">
-            <h3>Leaderboard</h3>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>#</th><th>Player</th><th>Score</th></tr></thead>
-                <tbody>
-                  @for (l of leaderboard; track l.participantId) {
-                    <tr><td>{{ l.rank }}</td><td>{{ l.displayName }}</td><td>{{ l.totalScore }}</td></tr>
-                  }
-                </tbody>
-              </table>
             </div>
-          </div>
+          }
         </div>
       }
 
@@ -144,7 +153,185 @@ import { SafeRichTextPipe } from '../../shared/safe-rich-text.pipe';
       @if (message) { <div class="success" style="margin-top:10px;">{{ message }}</div> }
       @if (error) { <div class="alert" style="margin-top:10px;">{{ error }}</div> }
     </div>
-  `
+  `,
+  styles: [`
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .session-info {
+      min-width: 0;
+    }
+
+    .session-info h2 {
+      margin: 0 0 8px;
+      word-wrap: break-word;
+    }
+
+    .session-info p {
+      margin: 4px 0;
+      font-size: 0.9rem;
+    }
+
+    .session-info a {
+      word-break: break-all;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .control-buttons button {
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
+    .control-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .tab-nav button {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--muted);
+      border-radius: 8px 8px 0 0;
+      transition: all 0.2s;
+    }
+
+    .tab-nav button:hover {
+      color: var(--text);
+      background: var(--surface-soft);
+    }
+
+    .tab-nav button.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background: var(--primary-tint);
+    }
+
+    .live-state-card {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .leaderboard-card {
+      width: 100%;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .leaderboard-card .table-wrap {
+      overflow-x: hidden;
+      border-radius: 12px;
+    }
+
+    .leaderboard-card table {
+      min-width: auto;
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+    }
+
+    .leaderboard-card th,
+    .leaderboard-card td {
+      padding: 10px 8px;
+      font-size: 0.85rem;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 33%;
+    }
+
+    .reject-input {
+      width: 100%;
+      min-width: 120px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      font-size: 0.85rem;
+    }
+
+    .actions-cell {
+      gap: 6px;
+    }
+
+    .actions-cell button {
+      padding: 6px 10px;
+      font-size: 0.8rem;
+    }
+
+    @media (max-width: 900px) {
+      .control-layout {
+        flex-direction: column;
+      }
+
+      .live-state-card,
+      .leaderboard-card {
+        min-width: 0;
+        max-width: 100%;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .header-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .control-buttons {
+        justify-content: flex-start;
+      }
+
+      .control-buttons button {
+        flex: 1;
+        min-width: calc(50% - 4px);
+        max-width: calc(50% - 4px);
+        padding: 10px 8px;
+        font-size: 0.8rem;
+      }
+
+      .live-state-card {
+        min-width: 0;
+      }
+
+      .leaderboard-card th,
+      .leaderboard-card td {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+      }
+
+      .reject-input {
+        min-width: 100px;
+      }
+    }
+  `]
 })
 export class GameSessionControlComponent implements OnInit, OnDestroy {
   sessionId = 0;
@@ -163,6 +350,7 @@ export class GameSessionControlComponent implements OnInit, OnDestroy {
   voiceError = '';
   message = '';
   error = '';
+  activeTab: 'live' | 'leaderboard' = 'live';
   private hostVoiceStream: MediaStream | null = null;
   private hostVoicePeers = new Map<number, RTCPeerConnection>();
   private pendingHostIceCandidates = new Map<number, RTCIceCandidateInit[]>();

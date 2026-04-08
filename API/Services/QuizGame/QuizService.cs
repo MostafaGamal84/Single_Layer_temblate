@@ -411,6 +411,70 @@ public class QuizService : IQuizService
         return await GetByIdAsync(newQuiz.Id);
     }
 
+    public async Task<int> AddCategoryToQuizzesAsync(IEnumerable<int> quizIds, string categoryName)
+    {
+        var ids = (quizIds ?? Enumerable.Empty<int>())
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        var normalizedCategory = NormalizeCategoryName(categoryName);
+        if (ids.Count == 0 || string.IsNullOrWhiteSpace(normalizedCategory.Name))
+        {
+            return 0;
+        }
+
+        var existingQuizIds = await _context.Set<Quiz>()
+            .Where(x => ids.Contains(x.Id) && !x.IsDeleted)
+            .Select(x => x.Id)
+            .ToListAsync();
+
+        if (existingQuizIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var category = await _context.Set<Category>()
+            .FirstOrDefaultAsync(x => x.NormalizedName == normalizedCategory.NormalizedName);
+
+        if (category is null)
+        {
+            category = new Category
+            {
+                Name = normalizedCategory.Name,
+                NormalizedName = normalizedCategory.NormalizedName,
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+            _context.Set<Category>().Add(category);
+        }
+        else if (category.IsDeleted)
+        {
+            category.IsDeleted = false;
+        }
+
+        var linkedQuizIds = category.Id > 0
+            ? await _context.Set<QuizCategory>()
+                .Where(x => existingQuizIds.Contains(x.QuizId) && x.CategoryId == category.Id && !x.IsDeleted)
+                .Select(x => x.QuizId)
+                .ToListAsync()
+            : new List<int>();
+
+        var quizIdsToUpdate = existingQuizIds.Except(linkedQuizIds).ToList();
+        foreach (var quizId in quizIdsToUpdate)
+        {
+            _context.Set<QuizCategory>().Add(new QuizCategory
+            {
+                QuizId = quizId,
+                Category = category,
+                IsDeleted = false
+            });
+        }
+
+        await _context.SaveChangesAsync();
+        return quizIdsToUpdate.Count;
+    }
+
     private QuizResponseDto MapQuizDetails(Quiz quiz)
     {
         return new QuizResponseDto

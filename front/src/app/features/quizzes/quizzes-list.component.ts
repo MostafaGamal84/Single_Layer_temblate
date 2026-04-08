@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -25,49 +25,161 @@ import { ToastService } from '../../core/services/toast.service';
         </div>
       </div>
 
-      <div class="filters-grid">
-        <div class="field">
-          <label for="tests-search">Search</label>
-          <input id="tests-search" name="testsSearch" [(ngModel)]="search" placeholder="Search title or description" (keyup.enter)="load()" />
-        </div>
-
-        <div class="field">
-          <label for="tests-category">Category</label>
-          <input id="tests-category" name="testsCategory" [(ngModel)]="category" placeholder="Unit 1" (keyup.enter)="load()" />
-        </div>
-
-        <div class="field">
-          <label for="tests-status">Status</label>
-          <select id="tests-status" name="testsStatus" [(ngModel)]="published" (change)="load()">
-            <option [ngValue]="null">All</option>
-            <option [ngValue]="true">Published</option>
-            <option [ngValue]="false">Draft</option>
-          </select>
-        </div>
-
-        <button type="button" class="filter-button" (click)="load()">Filter</button>
+      <div class="filter-bar">
+        <button type="button" class="filter-icon-btn" (click)="toggleFilterPopup(); $event.stopPropagation()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          <span>Filters</span>
+        </button>
+        @if (search || category || published !== null) {
+          <button type="button" class="clear-filters-btn" (click)="clearFilters()">Clear</button>
+        }
       </div>
+
+      @if (showFilterPopup) {
+        <div class="filter-popup-container">
+          <div class="filter-popup">
+            <div class="filter-popup-header">
+              <h4>Filters</h4>
+              <button type="button" class="close-filter-btn" (click)="cancelFilters()">✕</button>
+            </div>
+            <div class="filter-popup-body">
+              <div class="field">
+                <label>Search</label>
+                <input type="text" [(ngModel)]="tempSearch" placeholder="Search title or description" />
+              </div>
+              <div class="field">
+                <label>Category</label>
+                <input type="text" [(ngModel)]="tempCategory" placeholder="Unit 1" />
+              </div>
+              <div class="field">
+                <label>Status</label>
+                <select [(ngModel)]="tempPublished">
+                  <option [ngValue]="null">All</option>
+                  <option [ngValue]="true">Published</option>
+                  <option [ngValue]="false">Draft</option>
+                </select>
+              </div>
+            </div>
+            <div class="filter-popup-footer">
+              <button type="button" class="secondary" (click)="cancelFilters()">Cancel</button>
+              <button type="button" (click)="applyFilters()">Apply</button>
+            </div>
+          </div>
+        </div>
+      }
 
       @if (error) { <div class="alert">{{ error }}</div> }
 
       @if (selectedIds.size > 0) {
-        <div class="bulk-actions-bar">
-          <span class="selection-count">{{ selectedIds.size }} selected</span>
-          <div class="bulk-actions-desktop">
-            <button type="button" class="secondary" (click)="clearSelection()">Clear</button>
-            <button type="button" (click)="bulkExport()">Export</button>
-            <button type="button" (click)="bulkPublish()">Publish</button>
-            <button type="button" (click)="bulkUnpublish()">Unpublish</button>
-            <button type="button" class="danger" (click)="bulkDelete()">Delete</button>
+        <div class="bulk-actions-stack">
+          <div class="bulk-actions-bar">
+            <span class="selection-count">{{ selectedIds.size }} selected</span>
+            <button type="button" class="clear-selection-btn" (click)="clearSelection()">Clear</button>
+            <div class="bulk-dropdown-container">
+              <button type="button" class="bulk-dropdown-toggle" (click)="toggleBulkDropdown(); $event.stopPropagation()">
+                Actions
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              @if (showBulkDropdown) {
+                <div class="bulk-dropdown-menu">
+                  <button type="button" class="open-bulk-category-btn" (click)="openBulkCategoryPanel(); closeBulkDropdown()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 12a9 9 0 1 1-9-9"></path>
+                      <path d="M21 3v6h-6"></path>
+                      <path d="M12 8v8"></path>
+                      <path d="M8 12h8"></path>
+                    </svg>
+                    Add Category
+                  </button>
+                  <button type="button" (click)="bulkDuplicate(); closeBulkDropdown()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Duplicate
+                  </button>
+                  <button type="button" (click)="bulkExport(); closeBulkDropdown()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export
+                  </button>
+                  <button type="button" (click)="bulkPublish(); closeBulkDropdown()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    Publish
+                  </button>
+                  <button type="button" (click)="bulkUnpublish(); closeBulkDropdown()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                    </svg>
+                    Unpublish
+                  </button>
+                  <button type="button" class="danger" (click)="bulkDelete(); closeBulkDropdown()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Delete
+                  </button>
+                </div>
+              }
+            </div>
           </div>
-          <select class="bulk-actions-mobile" (change)="onBulkActionSelected($event)">
-            <option value="">Actions</option>
-            <option value="clear">Clear</option>
-            <option value="export">Export</option>
-            <option value="publish">Publish</option>
-            <option value="unpublish">Unpublish</option>
-            <option value="delete">Delete</option>
-          </select>
+
+          @if (showBulkCategoryPanel) {
+            <div class="bulk-category-panel" (click)="$event.stopPropagation()">
+              <div class="bulk-category-panel-header">
+                <div>
+                  <strong>Add category to selected tests</strong>
+                  <p>Choose an existing category or type a new one.</p>
+                </div>
+                <button type="button" class="secondary bulk-category-close-btn" (click)="closeBulkCategoryPanel()">Close</button>
+              </div>
+
+              <div class="bulk-category-form">
+                <div class="field">
+                  <label for="bulk-category-input">Category name</label>
+                  <input
+                    id="bulk-category-input"
+                    type="text"
+                    [(ngModel)]="bulkCategoryInput"
+                    placeholder="Unit 1"
+                    list="bulk-category-options"
+                    (keydown.enter)="bulkAddCategory($event)" />
+                  <datalist id="bulk-category-options">
+                    @for (category of bulkCategorySuggestions; track category) {
+                      <option [value]="category"></option>
+                    }
+                  </datalist>
+                </div>
+
+                <div class="bulk-category-actions">
+                  <button type="button" class="secondary" (click)="closeBulkCategoryPanel()">Cancel</button>
+                  <button type="button" (click)="bulkAddCategory()" [disabled]="bulkCategorySaving">
+                    {{ bulkCategorySaving ? 'Applying...' : 'Apply Category' }}
+                  </button>
+                </div>
+              </div>
+
+              @if (bulkCategorySuggestions.length) {
+                <div class="bulk-category-suggestions">
+                  @for (category of bulkCategorySuggestions; track category) {
+                    <button type="button" class="bulk-category-chip" (click)="useBulkCategorySuggestion(category)">{{ category }}</button>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
       }
 
@@ -200,6 +312,134 @@ padding: 10px 16px;
       text-decoration: none;
     }
 
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .filter-icon-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .filter-icon-btn:hover {
+      background: var(--surface-soft);
+      border-color: var(--border-strong);
+    }
+
+    .clear-filters-btn {
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .clear-filters-btn:hover {
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+
+    .filter-popup-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--overlay-bg);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      z-index: 1000;
+      padding: 60px 16px 16px;
+      backdrop-filter: blur(4px);
+    }
+
+    .filter-popup {
+      background: var(--dialog-panel-bg);
+      border: 1px solid var(--dialog-panel-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--dialog-panel-shadow);
+      overflow: hidden;
+    }
+
+    .filter-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .filter-popup-header h4 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .close-filter-btn {
+      background: none;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .close-filter-btn:hover {
+      background: var(--surface-soft);
+      color: var(--text);
+    }
+
+    .filter-popup-body {
+      display: grid;
+      gap: 14px;
+      padding: 20px;
+    }
+
+    .filter-popup-body .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .filter-popup-body label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .filter-popup-body select, 
+    .filter-popup-body input {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      font-size: 0.9rem;
+      width: 100%;
+    }
+
+    .filter-popup-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
     .filters-grid {
       display: grid;
       grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(160px, 220px) auto;
@@ -215,6 +455,11 @@ padding: 10px 16px;
 
     .filter-button {
       min-height: 42px;
+    }
+
+    .bulk-actions-stack {
+      display: grid;
+      gap: 12px;
     }
 
     .bulk-actions-bar {
@@ -233,6 +478,154 @@ padding: 10px 16px;
       color: var(--text);
       margin-right: auto;
       white-space: nowrap;
+    }
+
+    .clear-selection-btn {
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .clear-selection-btn:hover {
+      background: var(--surface-soft);
+    }
+
+    .bulk-dropdown-container {
+      position: relative;
+    }
+
+    .bulk-dropdown-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      background: var(--primary);
+      color: var(--primary-contrast);
+      border-color: var(--primary);
+      border-radius: 10px;
+    }
+
+    .bulk-dropdown-toggle:hover {
+      background: var(--primary-hover);
+    }
+
+    .bulk-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 200px;
+      background: var(--dialog-panel-bg);
+      border: 1px solid var(--dialog-panel-border);
+      border-radius: 12px;
+      box-shadow: var(--dialog-panel-shadow);
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .bulk-dropdown-menu button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-align: left;
+      border-radius: 0;
+    }
+
+    .bulk-dropdown-menu button:hover {
+      background: var(--surface-soft);
+    }
+
+    .bulk-dropdown-menu button.danger {
+      color: var(--danger);
+    }
+
+    .bulk-dropdown-menu button.danger:hover {
+      background: var(--danger-tint);
+    }
+
+    .bulk-category-panel {
+      display: grid;
+      gap: 14px;
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+
+    .bulk-category-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-category-panel-header strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .bulk-category-panel-header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .bulk-category-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .bulk-category-panel input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--input-bg);
+      font-size: 0.9rem;
+    }
+
+    .bulk-category-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-category-suggestions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .bulk-category-chip {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .bulk-category-chip:hover {
+      border-color: var(--border-strong);
+      background: var(--surface-elevated);
     }
 
     .bulk-actions-desktop {
@@ -342,11 +735,13 @@ padding: 10px 16px;
 
     .desktop-table {
       display: block;
+      min-height: 400px;
     }
 
     .mobile-list {
       display: none;
       gap: 10px;
+      min-height: 300px;
     }
 
     .mobile-item {
@@ -455,6 +850,14 @@ padding: 10px 16px;
         padding: 10px 12px;
       }
 
+      .bulk-category-panel {
+        padding: 14px 12px;
+      }
+
+      .bulk-category-form {
+        grid-template-columns: 1fr;
+      }
+
       .bulk-actions-mobile {
         min-height: 32px;
         padding: 6px 10px;
@@ -494,8 +897,18 @@ export class QuizzesListComponent implements OnInit {
   published: boolean | null = null;
   error = '';
   selectedFile: File | null = null;
+  existingCategories: string[] = [];
   selectedIds = new Set<number>();
   allSelected = false;
+
+  showFilterPopup = false;
+  showBulkDropdown = false;
+  showBulkCategoryPanel = false;
+  tempSearch = '';
+  tempCategory = '';
+  tempPublished: boolean | null = null;
+  bulkCategoryInput = '';
+  bulkCategorySaving = false;
 
   constructor(
     private service: QuizService,
@@ -505,6 +918,77 @@ export class QuizzesListComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadCategorySuggestions();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.bulk-dropdown-container')) {
+      this.showBulkDropdown = false;
+    }
+    if (!target.closest('.bulk-category-panel') && !target.closest('.open-bulk-category-btn')) {
+      this.showBulkCategoryPanel = false;
+    }
+    if (!target.closest('.filter-popup-container') && !target.closest('.filter-icon-btn')) {
+      this.showFilterPopup = false;
+    }
+  }
+
+  toggleFilterPopup(): void {
+    if (!this.showFilterPopup) {
+      this.tempSearch = this.search;
+      this.tempCategory = this.category;
+      this.tempPublished = this.published;
+    }
+    this.showFilterPopup = !this.showFilterPopup;
+  }
+
+  closeFilterPopup(): void {
+    this.showFilterPopup = false;
+  }
+
+  applyFilters(): void {
+    this.search = this.tempSearch;
+    this.category = this.tempCategory;
+    this.published = this.tempPublished;
+    this.closeFilterPopup();
+    this.load();
+  }
+
+  cancelFilters(): void {
+    this.closeFilterPopup();
+  }
+
+  clearFilters(): void {
+    this.search = '';
+    this.category = '';
+    this.published = null;
+    this.tempSearch = '';
+    this.tempCategory = '';
+    this.tempPublished = null;
+    this.load();
+  }
+
+  toggleBulkDropdown(): void {
+    this.showBulkDropdown = !this.showBulkDropdown;
+    if (this.showBulkDropdown) {
+      this.showBulkCategoryPanel = false;
+    }
+  }
+
+  closeBulkDropdown(): void {
+    this.showBulkDropdown = false;
+  }
+
+  openBulkCategoryPanel(): void {
+    this.showBulkCategoryPanel = true;
+  }
+
+  closeBulkCategoryPanel(): void {
+    this.showBulkCategoryPanel = false;
+    this.bulkCategoryInput = '';
+    this.bulkCategorySaving = false;
   }
 
   load(): void {
@@ -578,8 +1062,7 @@ export class QuizzesListComponent implements OnInit {
 
   toggleSelectAll(): void {
     if (this.allSelected) {
-      this.selectedIds.clear();
-      this.allSelected = false;
+      this.clearSelection();
     } else {
       this.items.forEach(q => this.selectedIds.add(q.id));
       this.allSelected = true;
@@ -588,11 +1071,16 @@ export class QuizzesListComponent implements OnInit {
 
   updateAllSelected(): void {
     this.allSelected = this.items.length > 0 && this.selectedIds.size === this.items.length;
+    if (this.selectedIds.size === 0) {
+      this.closeBulkDropdown();
+      this.closeBulkCategoryPanel();
+    }
   }
 
   clearSelection(): void {
     this.selectedIds.clear();
     this.allSelected = false;
+    this.closeBulkCategoryPanel();
   }
 
   bulkPublish(): void {
@@ -658,6 +1146,67 @@ export class QuizzesListComponent implements OnInit {
     });
   }
 
+  bulkDuplicate(): void {
+    const ids = Array.from(this.selectedIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    this.service.bulkDuplicate(ids).subscribe({
+      next: (res) => {
+        this.toast.show(res?.message || `${ids.length} tests duplicated`, 'success');
+        this.clearSelection();
+        this.load();
+      },
+      error: (err) => this.toast.show(err?.error?.message || 'Bulk duplicate failed', 'error')
+    });
+  }
+
+  bulkAddCategory(event?: Event): void {
+    event?.preventDefault();
+
+    const ids = Array.from(this.selectedIds);
+    const categoryName = String(this.bulkCategoryInput || '').trim();
+
+    if (!categoryName) {
+      this.toast.show('Enter a category name first', 'error');
+      return;
+    }
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    this.bulkCategorySaving = true;
+    this.service.bulkAddCategory(ids, categoryName).subscribe({
+      next: (res) => {
+        this.bulkCategorySaving = false;
+        if (!this.existingCategories.some((item) => item.toLowerCase() === categoryName.toLowerCase())) {
+          this.existingCategories = [...this.existingCategories, categoryName].sort((a, b) => a.localeCompare(b));
+        }
+
+        this.toast.show(res?.message || 'Category added successfully', 'success');
+        this.clearSelection();
+        this.load();
+      },
+      error: (err) => {
+        this.bulkCategorySaving = false;
+        this.toast.show(err?.error?.message || 'Failed to add category', 'error');
+      }
+    });
+  }
+
+  useBulkCategorySuggestion(category: string): void {
+    this.bulkCategoryInput = category;
+  }
+
+  get bulkCategorySuggestions(): string[] {
+    const searchValue = String(this.bulkCategoryInput || '').trim().toLowerCase();
+    return this.existingCategories
+      .filter((category) => !searchValue || category.toLowerCase().includes(searchValue))
+      .slice(0, 8);
+  }
+
   categoryLabel(item: any): string {
     const categories = Array.isArray(item?.categories) ? item.categories.map((category: any) => category?.name).filter(Boolean) : [];
     return categories.length ? categories.join(', ') : 'Uncategorized';
@@ -681,6 +1230,9 @@ export class QuizzesListComponent implements OnInit {
     switch (action) {
       case 'clear':
         this.clearSelection();
+        break;
+      case 'duplicate':
+        this.bulkDuplicate();
         break;
       case 'export':
         this.bulkExport();
@@ -720,5 +1272,20 @@ export class QuizzesListComponent implements OnInit {
         break;
     }
     select.value = '';
+  }
+
+  private loadCategorySuggestions(): void {
+    this.service.getCategories().subscribe({
+      next: (items) => {
+        this.existingCategories = Array.from(
+          new Set(
+            items
+              .map((item) => String(item?.name ?? '').trim())
+              .filter(Boolean)
+          )
+        ).sort((a, b) => a.localeCompare(b));
+      },
+      error: () => {}
+    });
   }
 }

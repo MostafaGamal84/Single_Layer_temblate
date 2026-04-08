@@ -68,36 +68,11 @@ import { TestModeService } from '../../core/services/test-mode.service';
       display: none;
       gap: 10px;
       min-width: 0;
+      min-height: 300px;
     }
 
-    .mobile-item {
-      min-width: 0;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px;
-      background: var(--surface-soft);
-      box-shadow: var(--shadow-soft);
-    }
-
-    .mobile-item h3 {
-      margin: 0;
-      color: var(--text);
-      font-size: 1.08rem;
-      line-height: 1.35;
-    }
-
-    .mobile-item p {
-      margin: 6px 0 10px;
-      color: var(--muted);
-    }
-
-    .mobile-item button {
-      width: 100%;
-      min-height: 42px;
-    }
-
-    .alert {
-      margin-top: 10px;
+    .table-wrap {
+      min-height: 400px;
     }
 
     @media (max-width: 760px) {
